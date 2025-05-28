@@ -429,6 +429,9 @@ async def restart_all_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_node_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for various node operations"""
     
+    if not context.user_data:
+        return NODE_MENU
+    
     # Check if this is a search operation
     search_type = context.user_data.get("search_type")
     if search_type == "nodes":
@@ -444,10 +447,11 @@ async def handle_node_text_input(update: Update, context: ContextTypes.DEFAULT_T
     
     # Default fallback
     else:
-        await update.message.reply_text(
-            "❌ Неожиданный ввод. Пожалуйста, используйте кнопки меню.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К серверам", callback_data="back_to_nodes")]])
-        )
+        if update.message:
+            await update.message.reply_text(
+                "❌ Неожиданный ввод. Пожалуйста, используйте кнопки меню.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К серверам", callback_data="back_to_nodes")]])
+            )
         return NODE_MENU
 
 # Export functions for conversation handler
