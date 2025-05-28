@@ -107,12 +107,10 @@ async def show_user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
         if sub_uuid:
             message += f"\n🔗 *Подписка:*\n"
             message += f"• UUID подписки: `{sub_uuid}`\n"
-            
-            sub_url = user.get('subscriptionUrl')
+              sub_url = user.get('subscriptionUrl')
             if sub_url:
-                # Truncate URL for display
-                display_url = sub_url[:50] + "..." if len(sub_url) > 50 else sub_url
-                message += f"• URL: `{display_url}`\n"
+                # Display full URL in code block to prevent underscore escaping
+                message += f"• URL:\n```\n{sub_url}\n```\n"
         
         # Contact information
         contact_info = []

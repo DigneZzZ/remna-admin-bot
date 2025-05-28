@@ -123,7 +123,7 @@ async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
         message += f"🆔 UUID: `{user['uuid']}`\n"
         message += f"🔑 Короткий UUID: `{user['shortUuid']}`\n"
         message += f"📝 UUID подписки: `{user['subscriptionUuid']}`\n\n"
-        message += f"🔗 URL подписки: `{user['subscriptionUrl']}`\n"
+        message += f"🔗 URL подписки:\n```\n{user['subscriptionUrl']}\n```\n"
         
         if update.callback_query:
             await update.callback_query.edit_message_text(
