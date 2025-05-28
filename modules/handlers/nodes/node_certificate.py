@@ -146,23 +146,9 @@ async def show_installation_guide(update: Update, context: ContextTypes.DEFAULT_
     """Show detailed installation guide for Remnawave Node"""
     message = "📚 *Руководство по установке Remnawave Node*\n\n"
     message += "🐳 **Docker Compose setup:**\n"
-    message += "```yaml\nversion: '3.8'\nservices:\n  remnawave-node:\n"
-    message += "    image: remnawave/remnawave-node:latest\n"
-    message += "    container_name: remnawave-node\n"
-    message += "    restart: unless-stopped\n"
-    message += "    environment:\n"
-    message += "      - PANEL_URL=https://your-panel.com\n"
-    message += "      - SSL_CERT=\"your_ssl_certificate_here\"\n"
-    message += "      - NODE_PORT=3000\n"
-    message += "    ports:\n"
-    message += "      - \"3000:3000\"\n"
-    message += "    volumes:\n"
-    message += "      - ./data:/app/data\n```\n\n"
-    message += "🔧 **Переменные окружения:**\n"
-    message += "• `PANEL_URL` - адрес вашей панели\n"
-    message += "• `SSL_CERT` - сертификат панели\n"
-    message += "• `NODE_PORT` - порт ноды (по умолчанию 3000)\n\n"
-    message += "▶️ **Запуск:** `docker-compose up -d`"
+    message += "```bash\nsudo bash -c \"$(curl -sL https://github.com/DigneZzZ/remnawave-scripts/raw/main/remnanode.sh)\" @ install\n```\n\n"
+   
+    message += "▶️ **Управление и информация:** `remnanode help`"
     
     keyboard = [
         [InlineKeyboardButton("📜 Получить сертификат", callback_data="get_panel_certificate")],
