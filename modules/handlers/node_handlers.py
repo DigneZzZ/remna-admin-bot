@@ -223,6 +223,9 @@ async def show_nodes_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_nodes_system_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show system information for all nodes"""
+    if not update.callback_query:
+        return ConversationHandler.END
+        
     try:
         from modules.api.nodes import NodeAPI
         
@@ -265,10 +268,11 @@ async def show_nodes_system_info(update: Update, context: ContextTypes.DEFAULT_T
         
     except Exception as e:
         logger.error(f"Error showing nodes system info: {e}")
-        await update.callback_query.edit_message_text(
-            "❌ Ошибка при загрузке системной информации.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]])
-        )
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                "❌ Ошибка при загрузке системной информации.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]])
+            )
     
     return NODE_MENU
 
