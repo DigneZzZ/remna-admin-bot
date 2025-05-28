@@ -384,6 +384,9 @@ async def confirm_restart_all_nodes(update: Update, context: ContextTypes.DEFAUL
 
 async def restart_all_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Restart all nodes"""
+    if not update.callback_query:
+        return ConversationHandler.END
+        
     try:
         from modules.api.nodes import NodeAPI
         
@@ -415,10 +418,11 @@ async def restart_all_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Error restarting all nodes: {e}")
-        await update.callback_query.edit_message_text(
-            "❌ Ошибка при выполнении операции.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]])
-        )
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                "❌ Ошибка при выполнении операции.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]])
+            )
     
     return NODE_MENU
 
