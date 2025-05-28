@@ -278,6 +278,9 @@ async def show_nodes_system_info(update: Update, context: ContextTypes.DEFAULT_T
 
 async def show_nodes_monitoring(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show real-time monitoring for nodes"""
+    if not update.callback_query:
+        return ConversationHandler.END
+        
     try:
         from modules.api.nodes import NodeAPI
         
@@ -346,15 +349,19 @@ async def show_nodes_monitoring(update: Update, context: ContextTypes.DEFAULT_TY
         
     except Exception as e:
         logger.error(f"Error showing nodes monitoring: {e}")
-        await update.callback_query.edit_message_text(
-            "❌ Ошибка при загрузке мониторинга.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]])
-        )
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                "❌ Ошибка при загрузке мониторинга.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]])
+            )
     
     return NODE_MENU
 
 async def confirm_restart_all_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirm restart all nodes operation"""
+    if not update.callback_query:
+        return ConversationHandler.END
+        
     message = "⚠️ *Подтверждение операции*\n\n"
     message += "Вы действительно хотите перезапустить ВСЕ серверы?\n\n"
     message += "🔄 Это может временно прервать соединения пользователей.\n"
