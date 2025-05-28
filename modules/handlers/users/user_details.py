@@ -15,8 +15,8 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         logger.info(f"Getting user details for UUID: {uuid}")
         response = await UserAPI.get_user_by_uuid(uuid)
         
-        if not response or 'response' not in response:
-            logger.warning(f"No response or invalid response for user {uuid}: {response}")
+        if not response:
+            logger.warning(f"No response for user {uuid}")
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_users")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -26,7 +26,11 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             )
             return USER_MENU
 
-        user = response['response']
+        # Handle both response formats: direct user data or wrapped in 'response' field
+        if isinstance(response, dict) and 'response' in response:
+            user = response['response']
+        else:
+            user = response
         logger.info(f"Successfully got user data for {user.get('username', 'Unknown')}")
 
         try:
