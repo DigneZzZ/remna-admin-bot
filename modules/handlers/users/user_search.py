@@ -24,7 +24,7 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("❌ Неизвестный тип поиска.")
             return USER_MENU
         
-        if not users_response or 'response' not in users_response:
+        if not users_response or 'response' not in users_response or not users_response['response']:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_users")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -49,7 +49,7 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            "❌ Произошла ошибка при поиске.",
+            f"❌ Произошла ошибка при поиске: {e}",
             reply_markup=reply_markup
         )
         return USER_MENU
