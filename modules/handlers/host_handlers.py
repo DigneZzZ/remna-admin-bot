@@ -756,3 +756,72 @@ async def handle_cancel_host_edit(update: Update, context: ContextTypes.DEFAULT_
         return await show_host_details(update, context, uuid)
     else:
         return await show_hosts_menu(update, context)
+
+async def handle_create_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle host creation input - alias for consistency with conversation handler"""
+    if update.message and update.message.text:
+        # Handle text input for host creation
+        text = update.message.text.strip()
+        
+        if not text:
+            await update.message.reply_text(
+                "❌ Пожалуйста, введите название хоста.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отмена", callback_data="cancel_edit_host")]])
+            )
+            return CREATE_HOST
+        
+        # Store the host name and proceed with creation logic
+        context.user_data["new_host_name"] = text
+        
+        try:
+            # Create the host using the API
+            result = await HostAPI.create_host({"name": text})
+            
+            if result and "success" in result and result["success"]:
+                await update.message.reply_text(
+                    f"✅ Хост '{text}' успешно создан!",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К хостам", callback_data="back_to_hosts")]])
+                )
+                return HOST_MENU
+            else:
+                error_msg = result.get("message", "Неизвестная ошибка") if result else "Ошибка API"
+                await update.message.reply_text(
+                    f"❌ Ошибка создания хоста: {error_msg}",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К хостам", callback_data="back_to_hosts")]])
+                )
+                return HOST_MENU
+                
+        except Exception as e:
+            logger.error(f"Error creating host: {e}")
+            await update.message.reply_text(
+                "❌ Произошла ошибка при создании хоста.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К хостам", callback_data="back_to_hosts")]])
+            )
+            return HOST_MENU
+    
+    elif update.callback_query:
+        # Handle callback queries during host creation
+        query = update.callback_query
+        await query.answer()
+        
+        if query.data == "cancel_edit_host":
+            context.user_data.pop("new_host_name", None)
+            await query.edit_message_text(
+                "❌ Создание хоста отменено.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К хостам", callback_data="back_to_hosts")]])
+            )
+            return HOST_MENU
+    
+    return CREATE_HOST
+
+# Export functions for conversation handler
+__all__ = [
+    'show_hosts_menu',
+    'handle_hosts_menu',
+    'handle_create_host',
+    'start_create_host',
+    'start_edit_host',
+    'list_hosts',
+    'show_host_details',
+    'search_hosts'
+]
