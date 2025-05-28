@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 
 async def show_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show enhanced nodes menu with comprehensive options"""
-    if not check_authorization(update.effective_user.id):
-        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+    if not update.effective_user or not check_authorization(update.effective_user.id):
+        if update.callback_query:
+            await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
         return ConversationHandler.END
 
     message = "🖥️ *Управление серверами*\n\n"
