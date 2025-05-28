@@ -333,11 +333,11 @@ class UserAPI:
         try:
             response = await UserAPI.get_all_users()
             if not response or 'response' not in response:
-                return []
+                return {'response': []}
             
             users = response['response']
             if not users:
-                return []
+                return {'response': []}
             
             partial_name_lower = partial_name.lower()
             matching_users = []
@@ -346,10 +346,10 @@ class UserAPI:
                 if partial_name_lower in user.get("username", "").lower():
                     matching_users.append(user)
             
-            return matching_users
+            return {'response': matching_users}
         except Exception as e:
             logger.error(f"Error searching users by partial name: {e}")
-            return []
+            return {'response': []}
     
     @staticmethod
     async def search_users_by_description(description_keyword):
@@ -357,11 +357,11 @@ class UserAPI:
         try:
             response = await UserAPI.get_all_users()
             if not response or 'response' not in response:
-                return []
+                return {'response': []}
             
             users = response['response']
             if not users:
-                return []
+                return {'response': []}
             
             keyword_lower = description_keyword.lower()
             matching_users = []
@@ -371,10 +371,10 @@ class UserAPI:
                 if user_description and keyword_lower in user_description.lower():
                     matching_users.append(user)
             
-            return matching_users
+            return {'response': matching_users}
         except Exception as e:
             logger.error(f"Error searching users by description: {e}")
-            return []
+            return {'response': []}
     
     @staticmethod
     async def get_user_by_telegram_id(telegram_id):
@@ -382,17 +382,18 @@ class UserAPI:
         try:
             response = await UserAPI.get_all_users()
             if not response or 'response' not in response:
-                return []
+                return {'response': []}
             
             users = response['response']
             for user in users:
                 if user.get("telegramId") == telegram_id:
-                    return {"response": user}
+                    # Возвращаем найденного пользователя в виде списка с одним элементом
+                    return {'response': [user]}
             
-            return []
+            return {'response': []}
         except Exception as e:
             logger.error(f"Error getting user by telegram ID: {e}")
-            return []
+            return {'response': []}
     
     @staticmethod
     async def get_user_by_email(email):
