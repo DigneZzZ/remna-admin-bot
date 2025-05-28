@@ -203,7 +203,7 @@ def format_user_details(user):
 def format_user_details_safe(user):
     """Format user details without Markdown (safe fallback)"""
     try:
-        expire_date = datetime.fromisostring(user['expireAt'].replace('Z', '+00:00'))
+        expire_date = datetime.fromisoformat(user['expireAt'].replace('Z', '+00:00'))
         days_left = (expire_date - datetime.now().astimezone()).days
         expire_status = "🟢" if days_left > 7 else "🟡" if days_left > 0 else "🔴"
         expire_text = f"{user['expireAt'][:10]} ({days_left} дней)"

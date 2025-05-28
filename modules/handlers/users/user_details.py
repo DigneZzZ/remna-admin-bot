@@ -11,48 +11,80 @@ logger = logging.getLogger(__name__)
 
 async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Show user details"""
-    response = await UserAPI.get_user_by_uuid(uuid)
-    
-    if not response or 'response' not in response:
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_users")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    try:
+        logger.info(f"Getting user details for UUID: {uuid}")
+        response = await UserAPI.get_user_by_uuid(uuid)
         
-        await update.callback_query.edit_message_text(
-            "❌ Пользователь не найден или ошибка при получении данных.",
-            reply_markup=reply_markup
-        )
-        return USER_MENU
-
-    user = response['response']
-
-    try:
-        message = format_user_details(user)
-    except Exception as e:
-        logger.error(f"Error formatting user details: {e}")
-        message = format_user_details_safe(user)
-
-    keyboard = SelectionHelper.create_user_info_keyboard(uuid, action_prefix="user_action")
-
-    try:
-        await update.callback_query.edit_message_text(
-            text=message,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        if "can't parse entities" in str(e).lower():
-            logger.warning(f"Markdown parsing error, using safe format: {e}")
-            safe_message = format_user_details_safe(user)
+        if not response or 'response' not in response:
+            logger.warning(f"No response or invalid response for user {uuid}: {response}")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_users")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             await update.callback_query.edit_message_text(
-                text=safe_message,
-                reply_markup=keyboard
+                "❌ Пользователь не найден или ошибка при получении данных.",
+                reply_markup=reply_markup
             )
-        else:
-            logger.error(f"Error updating message: {e}")
-            await update.callback_query.answer("❌ Ошибка при отображении данных")
+            return USER_MENU
 
-    context.user_data["current_user"] = user
-    return SELECTING_USER
+        user = response['response']
+        logger.info(f"Successfully got user data for {user.get('username', 'Unknown')}")
+
+        try:
+            message = format_user_details(user)
+            logger.info("Successfully formatted user details")
+        except Exception as e:
+            logger.error(f"Error formatting user details: {e}")
+            try:
+                message = format_user_details_safe(user)
+                logger.info("Successfully formatted user details with safe formatter")
+            except Exception as e2:
+                logger.error(f"Error in safe formatter: {e2}")
+                message = f"👤 Пользователь: {user.get('username', 'N/A')}\n🆔 UUID: {uuid}\n❌ Ошибка форматирования данных"
+
+        keyboard = SelectionHelper.create_user_info_keyboard(uuid, action_prefix="user_action")
+
+        try:
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            logger.info("Successfully updated message with user details")
+        except Exception as e:
+            if "can't parse entities" in str(e).lower():
+                logger.warning(f"Markdown parsing error, using safe format: {e}")
+                try:
+                    safe_message = format_user_details_safe(user)
+                    await update.callback_query.edit_message_text(
+                        text=safe_message,
+                        reply_markup=keyboard
+                    )
+                    logger.info("Successfully updated message with safe format")
+                except Exception as e2:
+                    logger.error(f"Error in safe message update: {e2}")
+                    await update.callback_query.edit_message_text(
+                        text=f"👤 {user.get('username', 'N/A')}\n❌ Ошибка отображения",
+                        reply_markup=keyboard
+                    )
+            else:
+                logger.error(f"Error updating message: {e}")
+                await update.callback_query.answer("❌ Ошибка при отображении данных")
+
+        context.user_data["current_user"] = user
+        return SELECTING_USER
+        
+    except Exception as e:
+        logger.error(f"Critical error in show_user_details: {e}", exc_info=True)
+        try:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_users")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.callback_query.edit_message_text(
+                "❌ Произошла критическая ошибка при загрузке данных пользователя.",
+                reply_markup=reply_markup
+            )
+        except:
+            pass
+        return USER_MENU
 
 async def handle_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user action with improved SelectionHelper support"""
