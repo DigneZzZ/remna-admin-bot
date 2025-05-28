@@ -67,9 +67,14 @@ async def show_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle nodes menu selection with comprehensive routing"""
     query = update.callback_query
+    if not query:
+        return ConversationHandler.END
+        
     await query.answer()
     
     data = query.data
+    if not data:
+        return NODE_MENU
     
     try:
         # Main node operations
@@ -126,7 +131,7 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Pagination
         elif data.startswith("page_nodes_"):
             page = int(data.split("_")[2])
-            return await list_nodes(update, context, page)
+            return await list_nodes(update, context)
         
         # Navigation
         elif data == "back_to_main":
