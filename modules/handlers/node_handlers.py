@@ -148,6 +148,9 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_nodes_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show comprehensive node statistics"""
+    if not update.callback_query:
+        return ConversationHandler.END
+        
     try:
         from modules.api.nodes import NodeAPI
         
@@ -210,10 +213,11 @@ async def show_nodes_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Error showing nodes stats: {e}")
-        await update.callback_query.edit_message_text(
-            "❌ Ошибка при загрузке статистики серверов.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]])
-        )
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                "❌ Ошибка при загрузке статистики серверов.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]])
+            )
     
     return NODE_MENU
 
