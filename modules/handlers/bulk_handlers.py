@@ -475,3 +475,20 @@ async def handle_bulk_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         parse_mode="Markdown"
     )
     return BULK_MENU
+
+# Export functions for conversation handler
+__all__ = [
+    'show_bulk_menu',
+    'handle_bulk_menu',
+    'handle_bulk_action',
+    'handle_bulk_confirm'
+]
+
+# Missing functions for conversation handler compatibility
+async def handle_bulk_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle bulk action - alias for handle_bulk_menu"""
+    return await handle_bulk_menu(update, context)
+
+async def handle_bulk_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle bulk confirmation - alias for handle_bulk_menu"""
+    return await handle_bulk_menu(update, context)
