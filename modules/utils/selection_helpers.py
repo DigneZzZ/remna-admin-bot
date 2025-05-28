@@ -93,8 +93,32 @@ class SelectionHelper:
         Returns: (keyboard, inbounds_data)
         """
         try:
-            inbounds = await InboundAPI.get_all_inbounds()
+            response = await InboundAPI.get_all_inbounds()
+            logger.info(f"get_inbounds_selection_keyboard: API response type: {type(response)}")
+            
+            # Parse response - handle different response formats
+            inbounds = None
+            if isinstance(response, dict):
+                if 'response' in response:
+                    inbounds = response['response']
+                    logger.info(f"get_inbounds_selection_keyboard: Found inbounds in 'response' key, count: {len(inbounds) if inbounds else 0}")
+                elif 'uuid' in response or 'tag' in response:
+                    # Single inbound returned as dict
+                    inbounds = [response]
+                    logger.info("get_inbounds_selection_keyboard: Single inbound returned as dict")
+                else:
+                    # Empty dict or unexpected format
+                    inbounds = []
+                    logger.warning(f"get_inbounds_selection_keyboard: Unexpected dict format: {list(response.keys())}")
+            elif isinstance(response, list):
+                inbounds = response
+                logger.info(f"get_inbounds_selection_keyboard: Direct list response, count: {len(inbounds)}")
+            else:
+                inbounds = []
+                logger.warning(f"get_inbounds_selection_keyboard: Unexpected response format: {type(response)}")
+            
             if not inbounds:
+                logger.warning("get_inbounds_selection_keyboard: No inbounds found")
                 keyboard = []
                 if include_back:
                     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
@@ -104,15 +128,26 @@ class SelectionHelper:
             inbounds_data = {}
             
             for inbound in inbounds:
-                display_name = f"🔌 {inbound['tag']} ({inbound['type']}, :{inbound['port']})"
-                callback_data = f"{callback_prefix}_{inbound['uuid']}"
-                inbounds_data[inbound['uuid']] = inbound
-                
-                keyboard.append([InlineKeyboardButton(display_name, callback_data=callback_data)])
+                try:
+                    # More robust display name generation
+                    tag = inbound.get('tag', 'Unknown')
+                    protocol = inbound.get('type', inbound.get('protocol', 'Unknown'))
+                    port = inbound.get('port', 'Unknown')
+                    
+                    display_name = f"🔌 {tag} ({protocol}, :{port})"
+                    callback_data = f"{callback_prefix}_{inbound['uuid']}"
+                    inbounds_data[inbound['uuid']] = inbound
+                    
+                    keyboard.append([InlineKeyboardButton(display_name, callback_data=callback_data)])
+                    logger.debug(f"get_inbounds_selection_keyboard: Added inbound button: {display_name}")
+                except Exception as e:
+                    logger.error(f"get_inbounds_selection_keyboard: Error processing inbound {inbound}: {e}")
+                    continue
             
             if include_back:
                 keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
             
+            logger.info(f"get_inbounds_selection_keyboard: Created keyboard with {len(keyboard)} buttons")
             return InlineKeyboardMarkup(keyboard), inbounds_data
             
         except Exception as e:
