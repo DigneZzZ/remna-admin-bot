@@ -467,3 +467,56 @@ async def handle_full_inbound_pagination(update: Update, context: ContextTypes.D
         )
 
     return INBOUND_MENU
+
+# Export functions for conversation handler
+__all__ = [
+    'show_inbounds_menu',
+    'handle_inbounds_menu',
+    'handle_inbound_edit_menu',
+    'handle_inbound_field_input',
+    'handle_cancel_inbound_edit',
+    'handle_create_inbound'
+]
+
+# Missing functions for conversation handler compatibility
+async def handle_inbound_edit_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inbound edit menu - placeholder for now"""
+    if update.callback_query:
+        await update.callback_query.answer("🚧 Редактирование inbound'ов пока не реализовано")
+    return INBOUND_MENU
+
+async def handle_inbound_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inbound field input - placeholder for now"""
+    if update.message:
+        await update.message.reply_text(
+            "🚧 Редактирование inbound'ов пока не реализовано",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К inbound'ам", callback_data="back_to_inbounds")]])
+        )
+    return INBOUND_MENU
+
+async def handle_cancel_inbound_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle cancel inbound edit"""
+    if not context.user_data:
+        return INBOUND_MENU
+    
+    # Clear editing state
+    context.user_data.pop("edit_inbound_uuid", None)
+    context.user_data.pop("edit_inbound_field", None)
+    context.user_data.pop("edit_inbound_data", None)
+    
+    if update.callback_query:
+        await update.callback_query.answer("❌ Редактирование отменено")
+        return await show_inbounds_menu(update, context)
+    else:
+        return INBOUND_MENU
+
+async def handle_create_inbound(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inbound creation - placeholder for now"""
+    if update.message:
+        await update.message.reply_text(
+            "🚧 Создание inbound'ов пока не реализовано",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К inbound'ам", callback_data="back_to_inbounds")]])
+        )
+    elif update.callback_query:
+        await update.callback_query.answer("🚧 Создание inbound'ов пока не реализовано")
+    return INBOUND_MENU
