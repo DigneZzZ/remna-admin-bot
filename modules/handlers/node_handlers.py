@@ -463,5 +463,39 @@ __all__ = [
     'show_nodes_system_info',
     'show_nodes_monitoring',
     'confirm_restart_all_nodes',
-    'restart_all_nodes'
+    'restart_all_nodes',
+    'handle_node_edit_menu',
+    'handle_node_field_input',
+    'handle_cancel_node_edit',
+    'handle_node_creation'
 ]
+
+# Alias functions for conversation handler compatibility
+async def handle_node_edit_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle node edit menu - alias for handle_edit_field_selection"""
+    return await handle_edit_field_selection(update, context)
+
+async def handle_node_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle node field input - alias for handle_edit_field_value"""
+    return await handle_edit_field_value(update, context)
+
+async def handle_cancel_node_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle cancel node edit"""
+    if not context.user_data:
+        return NODE_MENU
+    
+    # Clear editing state
+    context.user_data.pop("edit_node_uuid", None)
+    context.user_data.pop("edit_field_name", None)
+    context.user_data.pop("edit_node_data", None)
+    context.user_data.pop("modified_fields", None)
+    
+    if update.callback_query:
+        await update.callback_query.answer("❌ Редактирование отменено")
+        return await show_nodes_menu(update, context)
+    else:
+        return NODE_MENU
+
+async def handle_node_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle node creation - alias for handle_create_node_input"""
+    return await handle_create_node_input(update, context)
