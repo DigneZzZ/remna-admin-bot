@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,42 @@ def format_bytes(bytes_value):
             return f"{bytes_value:.2f} {unit}"
         bytes_value /= 1024.0
     return f"{bytes_value:.2f} PB"
+
+def parse_bytes(value_str):
+    """Parse human-readable bytes format to bytes integer"""
+    if not value_str:
+        return 0
+    
+    if isinstance(value_str, (int, float)):
+        return int(value_str)
+    
+    value_str = str(value_str).strip().upper()
+    
+    # Extract number and unit
+    match = re.match(r'^([\d.]+)\s*([KMGT]?B?)$', value_str)
+    if not match:
+        try:
+            return int(float(value_str))
+        except (ValueError, TypeError):
+            return 0
+    
+    number, unit = match.groups()
+    number = float(number)
+    
+    # Convert to bytes
+    multipliers = {
+        'B': 1,
+        'KB': 1024,
+        'MB': 1024 ** 2,
+        'GB': 1024 ** 3,
+        'TB': 1024 ** 4,
+        'K': 1024,
+        'M': 1024 ** 2,
+        'G': 1024 ** 3,
+        'T': 1024 ** 4
+    }
+    
+    return int(number * multipliers.get(unit, 1))
 
 def escape_markdown(text):
     """Escape Markdown special characters for Telegram"""
