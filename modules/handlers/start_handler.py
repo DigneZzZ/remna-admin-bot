@@ -458,7 +458,7 @@ async def get_enhanced_traffic_stats():
 async def get_enhanced_server_stats():
     """Get enhanced server/inbound statistics"""
     try:
-        inbounds_response = await InboundAPI.get_inbounds()
+        inbounds_response = await InboundAPI.get_all_inbounds()
         if not inbounds_response or 'response' not in inbounds_response:
             return None
         
@@ -529,7 +529,7 @@ async def get_basic_system_stats():
         
         # Basic inbound count
         try:
-            inbounds_response = await InboundAPI.get_inbounds()
+            inbounds_response = await InboundAPI.get_all_inbounds()
             if inbounds_response and 'response' in inbounds_response:
                 inbounds = inbounds_response['response']
                 inbounds_count = len(inbounds)

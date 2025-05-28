@@ -355,7 +355,7 @@ async def remove_inbound_from_all_nodes(update: Update, context: ContextTypes.DE
 async def handle_inbound_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int):
     """Handle pagination for inbound list"""
     try:
-        inbounds = await InboundAPI.get_inbounds()
+        inbounds = await InboundAPI.get_all_inbounds()
         
         if not inbounds:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_inbounds")]]

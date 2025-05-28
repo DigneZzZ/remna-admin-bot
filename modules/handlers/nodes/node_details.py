@@ -110,7 +110,7 @@ async def show_node_inbounds_management(update: Update, context: ContextTypes.DE
         node = node_response['response']
         
         # Get all inbounds
-        inbounds_response = await InboundAPI.get_inbounds()
+        inbounds_response = await InboundAPI.get_all_inbounds()
         if not inbounds_response or 'response' not in inbounds_response:
             raise Exception("Не удалось получить список inbound'ов")
         
