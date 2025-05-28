@@ -48,6 +48,9 @@ async def handle_hosts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
+    if not data:
+        return HOST_MENU
+
     if data == "list_hosts":
         return await list_hosts(update, context)
     elif data == "create_host":
@@ -81,6 +84,9 @@ async def handle_hosts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def list_hosts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List all hosts with improved response handling"""
+    if not update.callback_query:
+        return HOST_MENU
+    
     await update.callback_query.edit_message_text("🌐 Загрузка списка хостов...")
 
     try:
