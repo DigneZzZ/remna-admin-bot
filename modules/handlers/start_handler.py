@@ -74,6 +74,8 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
+    
+    return MAIN_MENU
 
 async def get_enhanced_system_stats():
     """Get enhanced system statistics with better error handling"""
