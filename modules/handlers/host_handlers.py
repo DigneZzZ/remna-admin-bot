@@ -299,7 +299,17 @@ async def start_create_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         # Get available inbounds
-        inbounds = await InboundAPI.get_all_inbounds()
+        response = await InboundAPI.get_all_inbounds()
+        
+        # Parse inbounds response
+        inbounds = None
+        if isinstance(response, dict):
+            if 'response' in response:
+                inbounds = response['response']
+            elif 'uuid' in response or 'tag' in response:
+                inbounds = [response]
+        elif isinstance(response, list):
+            inbounds = response
         
         if not inbounds:
             await update.callback_query.edit_message_text(
@@ -353,6 +363,7 @@ async def start_edit_host(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
 
         # Store editing context
         context.user_data["editing_host"] = host
+        context.user_data["editing_host_uuid"] = uuid
 
         message = f"✏️ *Редактирование хоста*\n\n"
         message += f"🌐 *Текущий хост:* {host.get('remark', 'Без названия')}\n\n"
@@ -381,6 +392,205 @@ async def start_edit_host(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
 
     return EDIT_HOST
 
+async def handle_host_edit_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle host edit menu selections"""
+    if not update.callback_query:
+        return EDIT_HOST
+    
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data.startswith("edit_field_"):
+        field = data.split("_", 2)[2]  # Extract field name
+        
+        # Store editing field
+        context.user_data["editing_field"] = field
+        
+        field_names = {
+            "remark": "название",
+            "address": "адрес",
+            "port": "порт"
+        }
+        
+        field_name = field_names.get(field, field)
+        
+        message = f"✏️ *Редактирование поля: {field_name}*\n\n"
+        message += f"Введите новое значение для поля '{field_name}':"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="cancel_host_edit")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        return EDIT_HOST_FIELD
+    
+    elif data == "cancel_host_edit":
+        return await handle_cancel_host_edit(update, context)
+    
+    return EDIT_HOST
+
+async def handle_host_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle input for host field editing"""
+    if not update.message:
+        return EDIT_HOST_FIELD
+    
+    try:
+        new_value = update.message.text.strip()
+        field = context.user_data.get("editing_field")
+        host = context.user_data.get("editing_host")
+        host_uuid = context.user_data.get("editing_host_uuid")
+        
+        if not field or not host or not host_uuid:
+            await update.message.reply_text(
+                "❌ Ошибка: отсутствуют данные для редактирования.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К хостам", callback_data="list_hosts")]])
+            )
+            return HOST_MENU
+        
+        # Validate input based on field
+        if field == "port":
+            try:
+                port = int(new_value)
+                if port < 1 or port > 65535:
+                    await update.message.reply_text(
+                        "❌ Порт должен быть числом от 1 до 65535.\nВведите корректное значение:",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Отмена", callback_data="cancel_host_edit")]])
+                    )
+                    return EDIT_HOST_FIELD
+                new_value = port
+            except ValueError:
+                await update.message.reply_text(
+                    "❌ Порт должен быть числом.\nВведите корректное значение:",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Отмена", callback_data="cancel_host_edit")]])
+                )
+                return EDIT_HOST_FIELD
+        
+        # Update host data
+        update_data = {field: new_value}
+        result = await HostAPI.update_host(host_uuid, update_data)
+        
+        if result:
+            field_names = {
+                "remark": "название",
+                "address": "адрес", 
+                "port": "порт"
+            }
+            field_name = field_names.get(field, field)
+            
+            await update.message.reply_text(
+                f"✅ Поле '{field_name}' успешно обновлено!",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👁️ Просмотр хоста", callback_data=f"view_host_{host_uuid}")]])
+            )
+            
+            # Clear editing context
+            context.user_data.pop("editing_field", None)
+            context.user_data.pop("editing_host", None)
+            context.user_data.pop("editing_host_uuid", None)
+            
+            return HOST_MENU
+        else:
+            await update.message.reply_text(
+                "❌ Не удалось обновить хост. Попробуйте еще раз:",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Отмена", callback_data="cancel_host_edit")]])
+            )
+            return EDIT_HOST_FIELD
+            
+    except Exception as e:
+        logger.error(f"Error updating host field: {e}")
+        await update.message.reply_text(
+            "❌ Произошла ошибка при обновлении хоста.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 К хостам", callback_data="list_hosts")]])
+        )
+        return HOST_MENU
+
+async def handle_cancel_host_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel host editing"""
+    host_uuid = context.user_data.get("editing_host_uuid")
+    
+    # Clear editing context
+    context.user_data.pop("editing_field", None)
+    context.user_data.pop("editing_host", None)
+    context.user_data.pop("editing_host_uuid", None)
+    
+    if host_uuid:
+        return await show_host_details(update, context, host_uuid)
+    else:
+        return await list_hosts(update, context)
+
+async def handle_create_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle host creation process"""
+    if not update.callback_query:
+        return CREATE_HOST
+    
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    
+    creation_data = context.user_data.get("creating_host", {})
+    
+    if data.startswith("select_inbound_"):
+        inbound_uuid = data.split("_", 2)[2]
+        
+        # Store selected inbound
+        creation_data["selected_inbound_uuid"] = inbound_uuid
+        creation_data["step"] = "enter_remark"
+        context.user_data["creating_host"] = creation_data
+        
+        message = "➕ *Создание нового хоста*\n\n"
+        message += "📝 Введите название (remark) для хоста:"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="cancel_host_creation")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        return CREATE_HOST
+    
+    elif data == "cancel_host_creation":
+        # Clear creation context
+        context.user_data.pop("creating_host", None)
+        return await show_hosts_menu(update, context)
+    
+    elif data == "confirm_host_creation":
+        # Create the host
+        try:
+            host_data = creation_data.get("host_data", {})
+            result = await HostAPI.create_host(host_data)
+            
+            if result:
+                await query.edit_message_text(
+                    "✅ Хост успешно создан!",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📋 К списку хостов", callback_data="list_hosts")]])
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ Не удалось создать хост.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_hosts")]])
+                )
+            
+            # Clear creation context
+            context.user_data.pop("creating_host", None)
+            return HOST_MENU
+            
+        except Exception as e:
+            logger.error(f"Error creating host: {e}")
+            await query.edit_message_text(
+                "❌ Произошла ошибка при создании хоста.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_hosts")]])
+            )
+            return HOST_MENU
+    
+    return CREATE_HOST
+
 # Export functions for conversation handler
 __all__ = [
     'show_hosts_menu',
@@ -393,5 +603,9 @@ __all__ = [
     'delete_host',
     'show_search_hosts_menu',
     'start_create_host',
-    'start_edit_host'
+    'start_edit_host',
+    'handle_host_edit_menu',
+    'handle_host_field_input',
+    'handle_cancel_host_edit',
+    'handle_create_host'
 ]
