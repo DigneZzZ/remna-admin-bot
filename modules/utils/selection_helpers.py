@@ -93,7 +93,7 @@ class SelectionHelper:
         Returns: (keyboard, inbounds_data)
         """
         try:
-            inbounds = await InboundAPI.get_inbounds()
+            inbounds = await InboundAPI.get_all_inbounds()
             if not inbounds:
                 keyboard = []
                 if include_back:
@@ -295,7 +295,7 @@ class SelectionHelper:
         Smart inbound lookup - try to find inbound by tag or UUID
         """
         try:
-            inbounds = await InboundAPI.get_inbounds()
+            inbounds = await InboundAPI.get_all_inbounds()
             if not inbounds:
                 return None
             
