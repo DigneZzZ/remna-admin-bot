@@ -76,8 +76,7 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not data:
         return NODE_MENU
     
-    try:
-        # Main node operations
+    try:        # Main node operations
         if data == "list_nodes":
             return await list_nodes(update, context)
         elif data == "add_node":
