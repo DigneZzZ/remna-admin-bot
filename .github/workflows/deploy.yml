@@ -6,8 +6,7 @@ on:
     types:
       - completed
     branches:
-      - main
-      - master
+      - '*'  # Все ветки
   
   # Allow manual trigger
   workflow_dispatch:
@@ -32,7 +31,15 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
           else
-            echo "tag=latest" >> $GITHUB_OUTPUT
+            # Получаем имя ветки из события workflow_run
+            BRANCH_NAME="${{ github.event.workflow_run.head_branch }}"
+            if [[ "$BRANCH_NAME" == "main" || "$BRANCH_NAME" == "master" ]]; then
+              echo "tag=latest" >> $GITHUB_OUTPUT
+            else
+              # Для других веток используем имя ветки как тег
+              SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+              echo "tag=$SAFE_BRANCH" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: Deploy notification
@@ -40,6 +47,7 @@ jobs:
           echo "🚀 Deploying Remnawave Admin Bot"
           echo "📦 Image: ghcr.io/dignezzz/remna-admin-bot:${{ steps.image_tag.outputs.tag }}"
           echo "🔧 Environment: Production"
+          echo "🌿 Branch: ${{ github.event.workflow_run.head_branch || 'manual' }}"
 
       # Example deployment to a server via SSH
       # Uncomment and configure these steps if you have a deployment server
@@ -62,9 +70,10 @@ jobs:
       #     curl -X POST "${{ secrets.DEPLOY_WEBHOOK_URL }}" \
       #       -H "Content-Type: application/json" \
       #       -H "Authorization: Bearer ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
-      #       -d '{"image_tag": "${{ steps.image_tag.outputs.tag }}", "service": "remna-telegram-bot"}'
+      #       -d '{"image_tag": "${{ steps.image_tag.outputs.tag }}", "service": "remna-telegram-bot", "branch": "${{ github.event.workflow_run.head_branch }}"}'
 
       - name: Deployment completed
         run: |
           echo "✅ Deployment process completed"
           echo "📝 Check your deployment environment for the running service"
+          echo "🏷️  Deployed tag: ${{ steps.image_tag.outputs.tag }}"

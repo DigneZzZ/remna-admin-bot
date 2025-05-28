@@ -3,14 +3,12 @@ name: Build and Publish Docker Image
 on:
   push:
     branches:
-      - main
-      - master
+      - '*'  # Все ветки
     tags:
       - 'v*'
   pull_request:
     branches:
-      - main
-      - master
+      - '*'  # Все ветки
 
 env:
   REGISTRY: ghcr.io
