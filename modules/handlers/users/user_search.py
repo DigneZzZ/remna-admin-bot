@@ -91,8 +91,7 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     try:
         users = None  # Результат поиска
-        
-        # Выполняем поиск в зависимости от типа
+          # Выполняем поиск в зависимости от типа
         if search_type == "username":
             response = await UserAPI.search_users_by_partial_name(search_value)
         elif search_type == "telegram_id":
@@ -100,7 +99,10 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         elif search_type == "description":
             response = await UserAPI.search_users_by_description(search_value)
         else:
-            await update.message.reply_text("❌ Неизвестный тип поиска.")
+            await update.message.reply_text(
+                "❌ Неизвестный тип поиска.", 
+                parse_mode="Markdown"
+            )
             return USER_MENU
         
         # Обработка разных форматов ответа API
@@ -139,10 +141,10 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error(f"Error in search: {e}")
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="search_users")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
+          await update.message.reply_text(
             f"❌ Произошла ошибка при поиске: {str(e)}",
-            reply_markup=reply_markup
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
         )
         return USER_MENU
 
@@ -197,18 +199,18 @@ async def show_single_user_result(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("🔙 Назад", callback_data="search_users")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(
+              await update.message.reply_text(
                 text=f"Найден пользователь: {user_name}",
-                reply_markup=reply_markup
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
             )
             return SELECTING_USER
         except:
             # Крайний случай - просто вернем пользователя в меню
-            keyboard = [[InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_users")]]
-            await update.message.reply_text(
+            keyboard = [[InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_users")]]            await update.message.reply_text(
                 "❌ Ошибка при отображении пользователя.",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
             )
             return USER_MENU
 
@@ -240,13 +242,13 @@ async def show_multiple_users_result(update: Update, context: ContextTypes.DEFAU
             parse_mode="Markdown"
         )
         
-        return SELECTING_USER
-    except Exception as e:
+        return SELECTING_USER    except Exception as e:
         logger.error(f"Error showing multiple users result: {e}")
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="search_users")]]
         await update.message.reply_text(
             "❌ Ошибка при отображении списка пользователей.",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
         )
         return USER_MENU
 
