@@ -148,7 +148,7 @@ def format_user_details(user):
         # URL подписки в блоке кода
         subscription_url = user.get('subscriptionUrl', '')
         if subscription_url:
-            message += f"🔗 *URL подписки:*\n```\n{subscription_url}\n```\n\n"
+            message += f"🔗 *URL подписки:* `{subscription_url}`\n\n"
         else:
             message += f"🔗 *URL подписки:* Не указан\n\n"
         
@@ -226,7 +226,7 @@ def format_user_details_safe(user):
     
     subscription_url = user.get('subscriptionUrl', '')
     if subscription_url:
-        message += f"🔗 URL подписки:\n```\n{subscription_url}\n```\n\n"
+        message += f"🔗 URL подписки:\n`{subscription_url}`\n\n"
     else:
         message += f"🔗 URL подписки: Не указан\n\n"
     

@@ -78,6 +78,13 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
 
         elif data == "search_nodes_quick":
             return await setup_quick_search(update, context, "nodes")
+            
+        # Quick search type selection
+        elif data.startswith("quick_search_"):
+            search_type = data.replace("quick_search_", "")
+            context.user_data["search_type"] = search_type
+            await update.callback_query.answer(f"✅ Выбран поиск по: {search_type}")
+            return SEARCH_USERS
 
         # Navigation
         elif data == "back_to_main":
@@ -313,7 +320,21 @@ async def setup_quick_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     message = f"{config['title']}\n\n{config['prompt']}\n\n{config['hint']}"
     
-    keyboard = [[InlineKeyboardButton("❌ Отмена", callback_data="back_to_main")]]
+    # Добавляем кнопки выбора типа поиска для пользователей
+    keyboard = []
+    if search_type == "users":
+        keyboard = [
+            [
+                InlineKeyboardButton("🔍 По имени", callback_data="quick_search_username"),
+                InlineKeyboardButton("📱 По Telegram ID", callback_data="quick_search_telegram_id")
+            ],
+            [
+                InlineKeyboardButton("📝 По описанию", callback_data="quick_search_description"),
+                InlineKeyboardButton("🏷️ По тегу", callback_data="quick_search_tag")
+            ],
+        ]
+    
+    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="back_to_main")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.callback_query.edit_message_text(
@@ -322,6 +343,7 @@ async def setup_quick_search(update: Update, context: ContextTypes.DEFAULT_TYPE,
     )
     
     context.user_data["quick_search_type"] = search_type
+    context.user_data["search_type"] = "username"  # По умолчанию ищем по имени пользователя
     return config["state"]
 
 async def refresh_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
