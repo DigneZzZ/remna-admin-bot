@@ -6,7 +6,7 @@ import random
 import string
 import re
 
-from modules.config import CREATE_USER_FIELD, USER_FIELDS, MAIN_MENU
+from modules.config import CREATE_USER_FIELD, USER_FIELDS, MAIN_MENU, USER_MENU
 from modules.api.users import UserAPI
 from modules.utils.formatters import escape_markdown, format_bytes
 
@@ -230,3 +230,259 @@ async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         
         return MAIN_MENU
+
+async def show_template_confirmation(query, context: ContextTypes.DEFAULT_TYPE, template_name: str):
+    """Show template confirmation with details"""
+    from modules.utils.presets import format_template_info
+    
+    info = format_template_info(template_name)
+    message = f"📋 *Подтверждение шаблона*\n\n{info}\n\n"
+    message += "Вы можете использовать этот шаблон как есть или изменить настройки:"
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Использовать шаблон", callback_data="confirm_template")],
+        [InlineKeyboardButton("⚙️ Изменить настройки", callback_data="modify_template")],
+        [InlineKeyboardButton("🔙 Выбрать другой шаблон", callback_data="back_to_template_selection")]
+    ]
+    
+    await query.edit_message_text(
+        text=message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+async def show_manual_creation_fields(query, context: ContextTypes.DEFAULT_TYPE):
+    """Show manual field editing interface"""
+    user_data = context.user_data.get("create_user", {})
+    
+    message = "⚙️ *Ручное создание пользователя*\n\n"
+    message += "Настройте параметры пользователя:\n\n"
+    
+    # Show current values
+    from modules.utils.formatters import format_bytes
+    
+    traffic = user_data.get("trafficLimitBytes", 100 * 1024 * 1024 * 1024)
+    if traffic == 0:
+        traffic_str = "Безлимитный"
+    else:
+        traffic_str = format_bytes(traffic)
+    
+    devices = user_data.get("hwidDeviceLimit", 1)
+    devices_str = f"{devices} устройств" if devices > 0 else "Без лимита"
+    
+    strategy = user_data.get("trafficLimitStrategy", "MONTH")
+    strategy_map = {
+        "NO_RESET": "Без сброса",
+        "DAY": "Ежедневно", 
+        "WEEK": "Еженедельно",
+        "MONTH": "Ежемесячно"
+    }
+    strategy_str = strategy_map.get(strategy, strategy)
+    
+    description = user_data.get("description", "Пользователь VPN")
+    
+    message += f"📈 Лимит трафика: *{traffic_str}*\n"
+    message += f"📱 Лимит устройств: *{devices_str}*\n"
+    message += f"🔄 Сброс трафика: *{strategy_str}*\n"
+    message += f"📝 Описание: *{description}*\n"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📈 Трафик", callback_data="edit_field_traffic"),
+            InlineKeyboardButton("📱 Устройства", callback_data="edit_field_devices")
+        ],
+        [
+            InlineKeyboardButton("🔄 Сброс", callback_data="edit_field_strategy"),
+            InlineKeyboardButton("📝 Описание", callback_data="edit_field_description")
+        ],
+        [InlineKeyboardButton("✅ Готово", callback_data="finish_manual_creation")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_template_selection")]
+    ]
+    
+    await query.edit_message_text(
+        text=message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+async def ask_username(query, context: ContextTypes.DEFAULT_TYPE):
+    """Ask for username or create user if template was used"""
+    using_template = context.user_data.get("using_template")
+    
+    if using_template:
+        # For templates, create user automatically with generated username
+        await finish_create_user_directly(query, context)
+    else:
+        # For manual creation, ask for username
+        message = "👤 *Введите имя пользователя*\n\n"
+        message += "Оставьте пустым для автоматической генерации:"
+        
+        keyboard = [
+            [InlineKeyboardButton("🎲 Сгенерировать автоматически", callback_data="username_done")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_template_selection")]
+        ]
+        
+        await query.edit_message_text(
+            text=message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+
+async def finish_create_user_directly(query, context: ContextTypes.DEFAULT_TYPE):
+    """Finish creating user directly (for templates)"""
+    # Generate username if not provided
+    user_data = context.user_data["create_user"]
+    if "username" not in user_data or not user_data["username"]:
+        characters = string.ascii_letters + string.digits
+        user_data["username"] = ''.join(random.choice(characters) for _ in range(20))
+    
+    # Set required defaults
+    defaults = {
+        "trafficLimitStrategy": "MONTH",
+        "trafficLimitBytes": 100 * 1024 * 1024 * 1024,  # 100 GB
+        "hwidDeviceLimit": 1,
+        "resetDay": 1
+    }
+    
+    for key, value in defaults.items():
+        if key not in user_data:
+            user_data[key] = value
+    
+    if "expireAt" not in user_data:
+        user_data["expireAt"] = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%dT00:00:00.000Z")
+    
+    if "description" not in user_data or not user_data["description"]:
+        user_data["description"] = f"Автоматически созданный пользователь {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    
+    # Handle device limit strategy
+    if user_data.get("hwidDeviceLimit", 0) > 0:
+        user_data["trafficLimitStrategy"] = user_data.get("trafficLimitStrategy", "MONTH")
+    
+    # Create user
+    result = await UserAPI.create_user(user_data)
+    
+    if result and 'response' in result:
+        user = result['response']
+        keyboard = [
+            [InlineKeyboardButton("👁️ Просмотр пользователя", callback_data=f"view_{user['uuid']}")],
+            [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = f"✅ Пользователь успешно создан!\n\n"
+        message += f"👤 Имя: {escape_markdown(user['username'])}\n"
+        message += f"🆔 UUID: `{user['uuid']}`\n"
+        message += f"🔑 Короткий UUID: `{user['shortUuid']}`\n"
+        message += f"📝 UUID подписки: `{user['subscriptionUuid']}`\n\n"
+        message += f"🔗 URL подписки:\n```\n{user['subscriptionUrl']}\n```\n"
+        
+        await query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    else:
+        keyboard = [
+            [InlineKeyboardButton("🔄 Попробовать снова", callback_data="create_user")],
+            [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text="❌ Не удалось создать пользователя. Проверьте введенные данные.",
+            reply_markup=reply_markup
+        )
+
+async def show_field_editor(query, context: ContextTypes.DEFAULT_TYPE, field_name: str):
+    """Show field value selection interface"""
+    message = f"⚙️ *Настройка: {field_name}*\n\n"
+    keyboard = []
+    
+    if field_name == "traffic":
+        message += "Выберите лимит трафика:"
+        from modules.utils.presets import TRAFFIC_LIMIT_PRESETS
+        
+        options = list(TRAFFIC_LIMIT_PRESETS.items())
+        for i in range(0, len(options), 2):
+            row = []
+            for j in range(2):
+                if i + j < len(options):
+                    name, value = options[i + j]
+                    row.append(InlineKeyboardButton(
+                        name, 
+                        callback_data=f"set_traffic_{value}"
+                    ))
+            keyboard.append(row)
+            
+    elif field_name == "devices":
+        message += "Выберите лимит устройств:"
+        from modules.utils.presets import DEVICE_LIMIT_PRESETS
+        
+        options = list(DEVICE_LIMIT_PRESETS.items())
+        for i in range(0, len(options), 2):
+            row = []
+            for j in range(2):
+                if i + j < len(options):
+                    name, value = options[i + j]
+                    row.append(InlineKeyboardButton(
+                        name,
+                        callback_data=f"set_devices_{value}"
+                    ))
+            keyboard.append(row)
+            
+    elif field_name == "strategy":
+        message += "Выберите стратегию сброса трафика:"
+        strategies = [
+            ("Без сброса", "NO_RESET"),
+            ("Ежедневно", "DAY"),
+            ("Еженедельно", "WEEK"), 
+            ("Ежемесячно", "MONTH")
+        ]
+        
+        for name, value in strategies:
+            keyboard.append([InlineKeyboardButton(
+                name,
+                callback_data=f"set_strategy_{value}"
+            )])
+            
+    elif field_name == "description":
+        message += "Выберите описание:"
+        from modules.utils.presets import DESCRIPTION_PRESETS
+        
+        for desc in DESCRIPTION_PRESETS:
+            keyboard.append([InlineKeyboardButton(
+                desc,
+                callback_data=f"set_description_{desc}"
+            )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="modify_template")])
+    
+    await query.edit_message_text(
+        text=message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+async def handle_field_value_selection(query, context: ContextTypes.DEFAULT_TYPE):
+    """Handle field value selection"""
+    data = query.data
+    user_data = context.user_data.get("create_user", {})
+    
+    if data.startswith("set_traffic_"):
+        value = int(data[12:])  # Remove "set_traffic_" prefix
+        user_data["trafficLimitBytes"] = value
+        
+    elif data.startswith("set_devices_"):
+        value = int(data[12:])  # Remove "set_devices_" prefix  
+        user_data["hwidDeviceLimit"] = value
+        
+    elif data.startswith("set_strategy_"):
+        value = data[13:]  # Remove "set_strategy_" prefix
+        user_data["trafficLimitStrategy"] = value
+        
+    elif data.startswith("set_description_"):
+        value = data[16:]  # Remove "set_description_" prefix
+        user_data["description"] = value
+    
+    context.user_data["create_user"] = user_data
+    await show_manual_creation_fields(query, context)
