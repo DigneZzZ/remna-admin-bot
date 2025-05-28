@@ -155,7 +155,7 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
     return CREATE_USER_FIELD
 
 async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Finish creating a user"""
+    """Finish creating a user with improved API response handling"""
     user_data = context.user_data["create_user"]
     
     # Validate and set defaults
@@ -185,52 +185,84 @@ async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if user_data.get("hwidDeviceLimit", 0) > 0:
         user_data["trafficLimitStrategy"] = "NO_RESET"
     
-    # Create user
-    result = await UserAPI.create_user(user_data)
-    
-    if result and 'response' in result:
-        user = result['response']
-        keyboard = [
-            [InlineKeyboardButton("👁️ Просмотр пользователя", callback_data=f"view_{user['uuid']}")],
-            [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    try:
+        # Create user
+        result = await UserAPI.create_user(user_data)
+        logger.info(f"User creation API result: {result}")
         
-        message = f"✅ Пользователь успешно создан!\n\n"
-        message += f"👤 Имя: {escape_markdown(user['username'])}\n"
-        message += f"🆔 UUID: `{user['uuid']}`\n"
-        message += f"🔑 Короткий UUID: `{user['shortUuid']}`\n"
-        message += f"📝 UUID подписки: `{user['subscriptionUuid']}`\n\n"
-        message += f"🔗 URL подписки:\n```\n{user['subscriptionUrl']}\n```\n"
+        # Handle different API response formats
+        user = None
+        if isinstance(result, dict):
+            if 'response' in result:
+                user = result['response']
+                logger.debug("Found user data in 'response' field")
+            elif 'uuid' in result:
+                user = result
+                logger.debug("Found user data directly in result")
         
-        if update.callback_query:
-            await update.callback_query.edit_message_text(
-                text=message,
-                reply_markup=reply_markup,
-                parse_mode="Markdown"
-            )
+        if user and 'uuid' in user:
+            keyboard = [
+                [InlineKeyboardButton("👁️ Просмотр пользователя", callback_data=f"view_{user['uuid']}")],
+                [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            message = f"✅ Пользователь успешно создан!\n\n"
+            message += f"👤 Имя: {escape_markdown(user['username'])}\n"
+            message += f"🆔 UUID: `{user['uuid']}`\n"
+            message += f"🔑 Короткий UUID: `{user.get('shortUuid', 'N/A')}`\n"
+            message += f"📝 UUID подписки: `{user.get('subscriptionUuid', 'N/A')}`\n\n"
+            
+            # Handle subscription URL with proper escaping
+            if 'subscriptionUrl' in user:
+                sub_url = user['subscriptionUrl']
+                message += f"🔗 URL подписки:\n```\n{sub_url}\n```\n"
+            
+            if update.callback_query:
+                await update.callback_query.edit_message_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
+                )
+            
+            # Clear creation data
+            context.user_data.pop("create_user", None)
+            context.user_data.pop("using_template", None)
+            
+            return MAIN_MENU
         else:
-            await update.message.reply_text(
-                text=message,
-                reply_markup=reply_markup,
-                parse_mode="Markdown"
-            )
-        
-        return MAIN_MENU
-    else:
+            logger.error(f"Invalid user creation response: {result}")
+            raise Exception("Invalid API response format")
+            
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
         keyboard = [
             [InlineKeyboardButton("🔄 Попробовать снова", callback_data="create_user")],
             [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(
-            "❌ Не удалось создать пользователя. Проверьте введенные данные.",
-            reply_markup=reply_markup
-        )
+        error_message = "❌ Не удалось создать пользователя. Проверьте введенные данные."
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                error_message,
+                reply_markup=reply_markup
+            )
+        else:
+            await update.message.reply_text(
+                error_message,
+                reply_markup=reply_markup
+            )
         
         return MAIN_MENU
-
+    
 async def show_template_confirmation(query, context: ContextTypes.DEFAULT_TYPE, template_name: str):
     """Show template confirmation with details"""
     from modules.utils.presets import format_template_info
@@ -329,7 +361,7 @@ async def ask_username(query, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def finish_create_user_directly(query, context: ContextTypes.DEFAULT_TYPE):
-    """Finish creating user directly (for templates)"""
+    """Finish creating user directly (for templates) with improved error handling"""
     # Generate username if not provided
     user_data = context.user_data["create_user"]
     if "username" not in user_data or not user_data["username"]:
@@ -358,30 +390,53 @@ async def finish_create_user_directly(query, context: ContextTypes.DEFAULT_TYPE)
     if user_data.get("hwidDeviceLimit", 0) > 0:
         user_data["trafficLimitStrategy"] = user_data.get("trafficLimitStrategy", "MONTH")
     
-    # Create user
-    result = await UserAPI.create_user(user_data)
-    
-    if result and 'response' in result:
-        user = result['response']
-        keyboard = [
-            [InlineKeyboardButton("👁️ Просмотр пользователя", callback_data=f"view_{user['uuid']}")],
-            [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    try:
+        # Create user
+        result = await UserAPI.create_user(user_data)
+        logger.info(f"Template user creation API result: {result}")
         
-        message = f"✅ Пользователь успешно создан!\n\n"
-        message += f"👤 Имя: {escape_markdown(user['username'])}\n"
-        message += f"🆔 UUID: `{user['uuid']}`\n"
-        message += f"🔑 Короткий UUID: `{user['shortUuid']}`\n"
-        message += f"📝 UUID подписки: `{user['subscriptionUuid']}`\n\n"
-        message += f"🔗 URL подписки:\n```\n{user['subscriptionUrl']}\n```\n"
+        # Handle different API response formats
+        user = None
+        if isinstance(result, dict):
+            if 'response' in result:
+                user = result['response']
+            elif 'uuid' in result:
+                user = result
         
-        await query.edit_message_text(
-            text=message,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-    else:
+        if user and 'uuid' in user:
+            keyboard = [
+                [InlineKeyboardButton("👁️ Просмотр пользователя", callback_data=f"view_{user['uuid']}")],
+                [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            message = f"✅ Пользователь успешно создан!\n\n"
+            message += f"👤 Имя: {escape_markdown(user['username'])}\n"
+            message += f"🆔 UUID: `{user['uuid']}`\n"
+            message += f"🔑 Короткий UUID: `{user.get('shortUuid', 'N/A')}`\n"
+            message += f"📝 UUID подписки: `{user.get('subscriptionUuid', 'N/A')}`\n\n"
+            
+            # Handle subscription URL with proper escaping
+            if 'subscriptionUrl' in user:
+                sub_url = user['subscriptionUrl']
+                message += f"🔗 URL подписки:\n```\n{sub_url}\n```\n"
+            
+            await query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            
+            # Clear creation data
+            context.user_data.pop("create_user", None)
+            context.user_data.pop("using_template", None)
+            
+        else:
+            logger.error(f"Invalid template user creation response: {result}")
+            raise Exception("Invalid API response format")
+            
+    except Exception as e:
+        logger.error(f"Error creating template user: {e}")
         keyboard = [
             [InlineKeyboardButton("🔄 Попробовать снова", callback_data="create_user")],
             [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
@@ -392,7 +447,6 @@ async def finish_create_user_directly(query, context: ContextTypes.DEFAULT_TYPE)
             text="❌ Не удалось создать пользователя. Проверьте введенные данные.",
             reply_markup=reply_markup
         )
-
 async def show_field_editor(query, context: ContextTypes.DEFAULT_TYPE, field_name: str):
     """Show field value selection interface"""
     message = f"⚙️ *Настройка: {field_name}*\n\n"
@@ -486,3 +540,29 @@ async def handle_field_value_selection(query, context: ContextTypes.DEFAULT_TYPE
     
     context.user_data["create_user"] = user_data
     await show_manual_creation_fields(query, context)
+
+async def handle_username_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle text input for username"""
+    if not update.message:
+        return CREATE_USER_FIELD
+    
+    username = update.message.text.strip()
+    
+    # Validate username
+    if username and not re.match(r'^[a-zA-Z0-9_-]{3,30}$', username):
+        await update.message.reply_text(
+            "❌ Имя пользователя должно содержать только буквы, цифры, дефисы и подчеркивания (3-30 символов).\n"
+            "Попробуйте еще раз или используйте автоматическую генерацию:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎲 Сгенерировать автоматически", callback_data="username_done")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="back_to_template_selection")]
+            ])
+        )
+        return CREATE_USER_FIELD
+    
+    # Store username and finish creation
+    if username:
+        context.user_data["create_user"]["username"] = username
+    
+    await finish_create_user(update, context)
+    return MAIN_MENU
