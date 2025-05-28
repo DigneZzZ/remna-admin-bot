@@ -61,9 +61,9 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats_text = await get_enhanced_system_stats()
     
     message = "🎛️ *RemnaWave Admin Panel*\n"
-    message += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    message += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
     message += stats_text + "\n"
-    message += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    message += "━━━━━━━━━━━━━━━━━━━━━━\n"
     message += "🎯 Выберите раздел для управления:"
 
     if update.callback_query:

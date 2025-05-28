@@ -72,9 +72,87 @@ async def show_template_selection(update: Update, context: ContextTypes.DEFAULT_
 
 async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user input when creating a user"""
-    # Implementation of user creation input handling
-    # This would include template selection, field input, validation, etc.
-    pass
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    # Handle template selection
+    if query.data.startswith("template_"):
+        template_name = query.data[9:]  # Remove "template_" prefix
+        logger.info(f"Template selected: {template_name}")
+        
+        from modules.utils.presets import get_template_by_name, apply_template_to_user_data, format_template_info
+        
+        template = get_template_by_name(template_name)
+        if not template:
+            await query.edit_message_text(
+                "❌ Шаблон не найден. Попробуйте снова.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Назад", callback_data="create_user")
+                ]])
+            )
+            return CREATE_USER_FIELD
+        
+        # Apply template to user data
+        context.user_data["create_user"] = apply_template_to_user_data({}, template_name)
+        context.user_data["using_template"] = template_name
+        
+        # Show template confirmation
+        await show_template_confirmation(query, context, template_name)
+        return CREATE_USER_FIELD
+        
+    # Handle manual creation
+    elif query.data == "create_manual":
+        await show_manual_creation_fields(query, context)
+        return CREATE_USER_FIELD
+        
+    # Handle template confirmation
+    elif query.data == "confirm_template":
+        await ask_username(query, context)
+        return CREATE_USER_FIELD
+        
+    # Handle template modification
+    elif query.data == "modify_template":
+        await show_manual_creation_fields(query, context)
+        return CREATE_USER_FIELD
+        
+    # Handle username input completion
+    elif query.data == "username_done":
+        username = context.user_data.get("temp_username", "")
+        if username:
+            context.user_data["create_user"]["username"] = username
+            context.user_data.pop("temp_username", None)
+            await finish_create_user(update, context)
+        return MAIN_MENU
+        
+    # Handle field editing in manual mode
+    elif query.data.startswith("edit_field_"):
+        field_name = query.data[11:]  # Remove "edit_field_" prefix
+        await show_field_editor(query, context, field_name)
+        return CREATE_USER_FIELD
+        
+    # Handle field value selection
+    elif query.data.startswith("set_"):
+        await handle_field_value_selection(query, context)
+        return CREATE_USER_FIELD
+        
+    # Handle navigation
+    elif query.data == "back_to_users":
+        from modules.handlers.user_handlers import show_users_menu
+        await show_users_menu(update, context)
+        return USER_MENU
+        
+    elif query.data == "back_to_template_selection":
+        await show_template_selection(update, context)
+        return CREATE_USER_FIELD
+        
+    elif query.data == "finish_manual_creation":
+        await ask_username(query, context)
+        return CREATE_USER_FIELD
+    
+    return CREATE_USER_FIELD
 
 async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Finish creating a user"""
