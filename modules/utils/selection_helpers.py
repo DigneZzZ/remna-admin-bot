@@ -30,13 +30,13 @@ class SelectionHelper:
         """
         try:
             response = await UserAPI.get_all_users()
-            if not response or not response.get("users"):
+            if not response or not response.get("response"):
                 keyboard = []
                 if include_back:
                     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
                 return InlineKeyboardMarkup(keyboard), {}
             
-            users = response["users"]
+            users = response["response"]
             total_users = len(users)
             total_pages = (total_users + per_page - 1) // per_page
             
