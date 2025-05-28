@@ -168,28 +168,62 @@ class SelectionHelper:
         """
         try:
             response = await NodeAPI.get_all_nodes()
-            if not response:
+            logger.info(f"get_nodes_selection_keyboard: API response type: {type(response)}")
+            
+            # Parse response - handle different response formats
+            nodes = None
+            if isinstance(response, dict):
+                if 'response' in response:
+                    nodes = response['response']
+                    logger.info(f"get_nodes_selection_keyboard: Found nodes in 'response' key, count: {len(nodes) if nodes else 0}")
+                elif 'nodes' in response:
+                    nodes = response['nodes']
+                    logger.info(f"get_nodes_selection_keyboard: Found nodes in 'nodes' key, count: {len(nodes) if nodes else 0}")
+                elif 'uuid' in response or 'name' in response:
+                    # Single node returned as dict
+                    nodes = [response]
+                    logger.info("get_nodes_selection_keyboard: Single node returned as dict")
+                else:
+                    # Empty dict or unexpected format
+                    nodes = []
+                    logger.warning(f"get_nodes_selection_keyboard: Unexpected dict format: {list(response.keys())}")
+            elif isinstance(response, list):
+                nodes = response
+                logger.info(f"get_nodes_selection_keyboard: Direct list response, count: {len(nodes)}")
+            else:
+                nodes = []
+                logger.warning(f"get_nodes_selection_keyboard: Unexpected response format: {type(response)}")
+            
+            if not nodes:
+                logger.warning("get_nodes_selection_keyboard: No nodes found")
                 keyboard = []
                 if include_back:
                     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
                 return InlineKeyboardMarkup(keyboard), {}
             
-            nodes = response if isinstance(response, list) else response.get("nodes", [])
             keyboard = []
             nodes_data = {}
             
             for node in nodes:
-                status_emoji = "🟢" if not node.get("isDisabled", False) and node.get("isConnected", False) else "🔴"
-                display_name = f"{status_emoji} {node['name']} ({node.get('countryCode', 'XX')})"
-                
-                callback_data = f"{callback_prefix}_{node['uuid']}"
-                nodes_data[node['uuid']] = node
-                
-                keyboard.append([InlineKeyboardButton(display_name, callback_data=callback_data)])
+                try:
+                    status_emoji = "🟢" if not node.get("isDisabled", False) and node.get("isConnected", False) else "🔴"
+                    name = node.get('name', 'Unknown')
+                    country_code = node.get('countryCode', 'XX')
+                    display_name = f"{status_emoji} {name} ({country_code})"
+                    
+                    callback_data = f"{callback_prefix}_{node['uuid']}"
+                    nodes_data[node['uuid']] = node
+                    
+                    keyboard.append([InlineKeyboardButton(display_name, callback_data=callback_data)])
+                    logger.debug(f"get_nodes_selection_keyboard: Added node button: {display_name}")
+                except Exception as e:
+                    logger.error(f"get_nodes_selection_keyboard: Error processing node {node}: {e}")
+                    continue
             
             if include_back:
                 keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
             
+            logger.info(f"get_nodes_selection_keyboard: Created keyboard with {len(keyboard)} buttons")
             return InlineKeyboardMarkup(keyboard), nodes_data
             
         except Exception as e:
