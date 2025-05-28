@@ -287,7 +287,9 @@ class SelectionHelper:
                 InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_nodes")
             ]
         ]
-        return InlineKeyboardMarkup(keyboard)    @staticmethod
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
     async def get_user_by_identifier(identifier: str) -> Optional[Dict]:
         """
         Smart user lookup - try to find user by username, UUID, or telegram ID
@@ -314,7 +316,7 @@ class SelectionHelper:
             if identifier.isdigit():
                 try:
                     users = await UserAPI.get_user_by_telegram_id(identifier)
-                    if users and len(users) > 0:
+                    if users and isinstance(users, list) and len(users) > 0:
                         return users[0]
                 except Exception:
                     pass
