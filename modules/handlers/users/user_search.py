@@ -122,10 +122,10 @@ async def handle_search_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not users:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="search_users")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(
-                f"❌ Пользователи по запросу '{search_value}' не найдены.",
-                reply_markup=reply_markup
+              await update.message.reply_text(
+                f"❌ Пользователи по запросу '{escape_markdown(search_value)}' не найдены.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
             )
             return USER_MENU
         
