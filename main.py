@@ -1,5 +1,6 @@
 ﻿import os
 import logging
+import sys
 from dotenv import load_dotenv
 
 # Setup logging first, before any other imports
@@ -77,7 +78,6 @@ logger.warning("Warning logging enabled")
 logger.error("Error logging enabled")
 
 # Force flush to ensure logs are written
-import sys
 sys.stdout.flush()
 sys.stderr.flush()
 
@@ -103,10 +103,9 @@ def main():
     logger.info(f"Admin user IDs: {admin_user_ids}")
     
     # Force flush to ensure logs are written
-    import sys
     sys.stdout.flush()
     sys.stderr.flush()
-      # Environment check - only errors in production
+    # Environment check - only errors in production
     if not api_token:
         logger.error("REMNAWAVE_API_TOKEN environment variable is not set")
         return
