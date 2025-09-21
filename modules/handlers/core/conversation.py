@@ -27,7 +27,7 @@ from modules.handlers.users import (
     handle_users_menu, handle_user_selection, handle_user_action,
     handle_action_confirmation, handle_text_input,
     handle_edit_field_selection, handle_edit_field_value,
-    handle_create_user_input
+    handle_create_user_input, handle_cancel_user_creation
 )
 from modules.handlers.nodes import (
     handle_nodes_menu, handle_node_edit_menu, handle_node_field_input, handle_cancel_node_edit,
@@ -122,9 +122,11 @@ def create_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_edit_field_value)
             ],
             CREATE_USER: [
+                CallbackQueryHandler(handle_cancel_user_creation, pattern="^cancel_create$"),
                 CallbackQueryHandler(handle_create_user_input)
             ],
             CREATE_USER_FIELD: [
+                CallbackQueryHandler(handle_cancel_user_creation, pattern="^cancel_create$"),
                 CallbackQueryHandler(handle_create_user_input),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_create_user_input)
             ],

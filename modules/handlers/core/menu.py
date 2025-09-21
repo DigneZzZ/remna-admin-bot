@@ -1,13 +1,16 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
+import logging
 
 from modules.config import MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU, CREATE_USER, CREATE_USER_FIELD, SELECTING_USER
+
+logger = logging.getLogger(__name__)
 from modules.utils.auth import check_authorization
 from modules.handlers.users import show_users_menu, start_create_user, show_user_details
 from modules.handlers.nodes import show_nodes_menu
 from modules.handlers.stats import show_stats_menu
 from modules.handlers.hosts import show_hosts_menu
-from modules.handlers.inbounds import show_inbounds_menu
+from modules.handlers.inbounds import show_inbounds_menu, handle_inbounds_menu
 from modules.handlers.bulk import show_bulk_menu
 from modules.handlers.core.start import show_main_menu
 
@@ -22,6 +25,10 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
 
     data = query.data
+    logger.info(f"=== MENU SELECTION HANDLER ===")
+    logger.info(f"Handling menu callback: {data}")
+    logger.info(f"Current state: {context.user_data.get('conversation_state', 'unknown')}")
+    logger.info(f"==============================")
 
     if data == "users" or data == "menu_users":
         await show_users_menu(update, context)
@@ -42,6 +49,11 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == "inbounds" or data == "menu_inbounds":
         await show_inbounds_menu(update, context)
         return INBOUND_MENU
+
+    # Handle inbound menu callbacks (temporary fix)
+    elif data in ["list_inbounds", "list_full_inbounds", "list_inbounds_stats", "filter_inbounds", "refresh_inbounds", "debug_users"]:
+        logger.info(f"Redirecting inbound callback to handle_inbounds_menu: {data}")
+        return await handle_inbounds_menu(update, context)
 
     elif data == "bulk" or data == "menu_bulk":
         await show_bulk_menu(update, context)

@@ -10,11 +10,11 @@ services:
       # Только переменные, специфичные для production
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
     
     volumes:
       # Mount logs directory for persistence
       - remna-bot-logs:/app/logs
-      
       # Mount .env file if you prefer file-based configuration
       # - ./.env:/app/.env:ro
     

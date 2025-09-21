@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from modules.config import MAIN_MENU, STATS_MENU
 from modules.api.system import SystemAPI
 from modules.api.nodes import NodeAPI
-from modules.utils.formatters import format_system_stats, format_bandwidth_stats, format_bytes
+from modules.utils.formatters import format_system_stats, format_bandwidth_stats, format_bytes, format_nodes_stats
 from modules.handlers.core.start import show_main_menu
 
 logger = logging.getLogger(__name__)
@@ -143,42 +143,30 @@ async def show_nodes_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info("Starting nodes stats request")
         await query.edit_message_text("📊 Загрузка статистики серверов...")
         
-        # Get nodes stats from API
-        logger.info("Calling NodeAPI.get_nodes_stats()")
-        nodes_stats = await NodeAPI.get_nodes_stats()
-        logger.info(f"NodeAPI.get_nodes_stats() returned: {nodes_stats}")
+        # Get all nodes data for detailed statistics
+        logger.info("Calling NodeAPI.get_all_nodes()")
+        nodes_data = await NodeAPI.get_all_nodes()
+        logger.info(f"NodeAPI.get_all_nodes() returned {len(nodes_data) if nodes_data else 0} nodes")
         
-        if not nodes_stats:
-            logger.warning("nodes_stats is None or empty")
+        if not nodes_data:
+            logger.warning("nodes_data is None or empty")
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await query.edit_message_text(
-                "❌ Не удалось получить статистику серверов.",
+                "❌ Не удалось получить данные о серверах.",
                 reply_markup=reply_markup
             )
             return STATS_MENU
         
-        # Format nodes statistics
-        message = "🖥️ *Статистика серверов*\n\n"
+        # Format nodes statistics using the new enhanced formatter
+        message = format_nodes_stats(nodes_data)
         
-        total_nodes = len(nodes_stats)
-        online_nodes = sum(1 for node in nodes_stats if node.get('status') == 'connected')
-        
-        message += f"📊 *Общая информация:*\n"
-        message += f"• Всего серверов: {total_nodes}\n"
-        message += f"• Онлайн: {online_nodes}\n"
-        message += f"• Офлайн: {total_nodes - online_nodes}\n\n"
-        
-        if nodes_stats:
-            message += "📋 *Детали серверов:*\n"
-            for node in nodes_stats:
-                name = node.get('name', 'Неизвестно')
-                status = '🟢' if node.get('status') == 'connected' else '🔴'
-                uptime = node.get('uptime', 'N/A')
-                message += f"• {status} {name} (Uptime: {uptime})\n"
-        
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]]
+        # Add refresh and back buttons
+        keyboard = [
+            [InlineKeyboardButton("🔄 Обновить", callback_data="nodes_stats")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(

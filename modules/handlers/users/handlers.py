@@ -2,14 +2,102 @@ from datetime import datetime, timedelta
 import logging
 import random
 import string
+from typing import Dict, Optional, Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 import re
+import asyncio
 
 from modules.config import (
     MAIN_MENU, USER_MENU, SELECTING_USER, WAITING_FOR_INPUT, CONFIRM_ACTION,
     EDIT_USER, EDIT_FIELD, EDIT_VALUE, CREATE_USER, CREATE_USER_FIELD, USER_FIELDS
 )
+
+# Константы для callback_data
+class CallbackData:
+    # Основные действия
+    LIST_USERS = "list_users"
+    SEARCH_USER = "search_user"
+    CREATE_USER = "create_user"
+    BACK_TO_MAIN = "back_to_main"
+    BACK_TO_USERS = "back_to_users"
+    BACK_TO_LIST = "back_to_list"
+    
+    # Действия с пользователями
+    VIEW_USER = "view_"
+    EDIT_USER = "edit_"
+    DISABLE_USER = "disable_"
+    ENABLE_USER = "enable_"
+    RESET_TRAFFIC = "reset_"
+    REVOKE_SUBSCRIPTION = "revoke_"
+    DELETE_USER = "delete_"
+    USER_STATS = "stats_"
+    USER_HWID = "hwid_"
+    
+    # Подтверждения
+    CONFIRM_ACTION = "confirm_action"
+    FINAL_DELETE_USER = "final_delete_user"
+    
+    # Создание пользователей
+    TEMPLATE = "template_"
+    CREATE_MANUAL = "create_manual"
+    CANCEL_CREATE = "cancel_create"
+    USE_TEMPLATE = "use_template_"
+    CUSTOMIZE_TEMPLATE = "customize_template_"
+    FINISH_TEMPLATE_USER = "finish_template_user"
+    ADD_OPTIONAL_FIELDS = "add_optional_fields"
+    USE_TEMPLATE_VALUE = "use_template_value_"
+    SKIP_FIELD = "skip_field"
+    
+    # Поля создания
+    CREATE_FIELD = "create_field_"
+    CREATE_DATE = "create_date_"
+    CREATE_TRAFFIC = "create_traffic_"
+    CREATE_DESC = "create_desc_"
+    CREATE_DEVICE = "create_device_"
+    
+    # Редактирование полей
+    EDIT_FIELD = "edit_field_"
+    
+    # HWID устройства
+    ADD_HWID = "add_hwid_"
+    DEL_HWID = "del_hwid_"
+    CONFIRM_DEL_HWID = "confirm_del_hwid_"
+    
+    # Пагинация
+    PREV_PAGE = "prev_page"
+    NEXT_PAGE = "next_page"
+    PAGE_INFO = "page_info"
+    USERS_PAGE = "users_page_"
+    
+    # SelectionHelper
+    SELECT_USER = "select_user_"
+    USER_ACTION = "user_action_"
+    BACK = "back"
+
+# Константы для сообщений
+class Messages:
+    # Ошибки авторизации
+    NOT_AUTHORIZED = "⛔ Вы не авторизованы для использования этого бота."
+    
+    # Общие ошибки
+    USER_NOT_FOUND = "❌ Пользователь не найден или ошибка при получении данных."
+    ERROR_LOADING = "❌ Ошибка при загрузке данных."
+    INVALID_INPUT = "❌ Неверный формат ввода."
+    OPERATION_FAILED = "❌ Не удалось выполнить операцию."
+    
+    # Успешные операции
+    USER_CREATED = "✅ Пользователь успешно создан!"
+    USER_UPDATED = "✅ Пользователь успешно обновлен!"
+    USER_DELETED = "✅ Пользователь успешно удален!"
+    FIELD_UPDATED = "✅ Поле успешно обновлено."
+    
+    # Предупреждения
+    CONFIRM_DELETE = "⚠️ Вы уверены, что хотите удалить пользователя?"
+    CONFIRM_DISABLE = "⚠️ Вы уверены, что хотите отключить пользователя?"
+    CONFIRM_ENABLE = "⚠️ Вы уверены, что хотите включить пользователя?"
+    CONFIRM_RESET = "⚠️ Вы уверены, что хотите сбросить трафик пользователя?"
+    CONFIRM_REVOKE = "⚠️ Вы уверены, что хотите отозвать подписку пользователя?"
 from modules.api.users import UserAPI
 from modules.utils.formatters import format_bytes, format_user_details, format_user_details_safe, escape_markdown, safe_edit_message
 from modules.utils.selection_helpers import SelectionHelper
@@ -18,15 +106,533 @@ from modules.handlers.core.start import show_main_menu
 
 logger = logging.getLogger(__name__)
 
+# Декоратор для проверки авторизации
+def require_authorization(func):
+    """Декоратор для проверки авторизации пользователя"""
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        if not check_authorization(update.effective_user):
+            if update.callback_query:
+                await update.callback_query.answer(Messages.NOT_AUTHORIZED, show_alert=True)
+            else:
+                await update.message.reply_text(Messages.NOT_AUTHORIZED)
+            return ConversationHandler.END
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
+# Декоратор для логирования действий пользователей
+def log_user_action(action: str):
+    """Декоратор для логирования действий пользователей"""
+    def decorator(func):
+        async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+            user_id = update.effective_user.id if update.effective_user else "unknown"
+            username = update.effective_user.username if update.effective_user else "unknown"
+            
+            logger.info(f"User action: {action} by user {username} (ID: {user_id})")
+            
+            try:
+                result = await func(update, context, *args, **kwargs)
+                logger.info(f"Action {action} completed successfully for user {username}")
+                return result
+            except Exception as e:
+                logger.error(f"Action {action} failed for user {username}: {str(e)}")
+                raise
+        return wrapper
+    return decorator
+
+# Обработка ошибок
+class ErrorHandler:
+    """Класс для обработки ошибок"""
+    
+    @staticmethod
+    async def handle_api_error(update: Update, context: ContextTypes.DEFAULT_TYPE, error: Exception, operation: str = "операция") -> bool:
+        """Обрабатывает ошибки API"""
+        logger.error(f"API error during {operation}: {str(error)}")
+        
+        error_message = f"❌ Ошибка при выполнении {operation}.\n\n"
+        
+        if "connection" in str(error).lower():
+            error_message += "🔌 Проблема с подключением к серверу. Попробуйте позже."
+        elif "timeout" in str(error).lower():
+            error_message += "⏰ Превышено время ожидания. Попробуйте позже."
+        elif "unauthorized" in str(error).lower() or "forbidden" in str(error).lower():
+            error_message += "🔒 Недостаточно прав для выполнения операции."
+        elif "not found" in str(error).lower():
+            error_message += "🔍 Запрашиваемые данные не найдены."
+        else:
+            error_message += "⚠️ Внутренняя ошибка сервера. Обратитесь к администратору."
+        
+        keyboard = KeyboardBuilder.create_back_button()
+        
+        if update.callback_query:
+            try:
+                await update.callback_query.edit_message_text(
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            except Exception as edit_error:
+                logger.error(f"Error editing message: {edit_error}")
+                await update.callback_query.answer("❌ Ошибка при обновлении сообщения")
+        else:
+            await update.message.reply_text(
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        
+        return True
+    
+    @staticmethod
+    async def handle_validation_error(update: Update, context: ContextTypes.DEFAULT_TYPE, error_message: str, back_callback: str = CallbackData.BACK_TO_USERS) -> bool:
+        """Обрабатывает ошибки валидации"""
+        keyboard = KeyboardBuilder.create_back_button(back_callback)
+        
+        if update.callback_query:
+            try:
+                await update.callback_query.edit_message_text(
+                    text=f"❌ {error_message}",
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            except Exception as edit_error:
+                logger.error(f"Error editing message: {edit_error}")
+                await update.callback_query.answer("❌ Ошибка валидации")
+        else:
+            await update.message.reply_text(
+                text=f"❌ {error_message}",
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        
+        return True
+    
+    @staticmethod
+    async def handle_unexpected_error(update: Update, context: ContextTypes.DEFAULT_TYPE, error: Exception, operation: str = "операция") -> bool:
+        """Обрабатывает неожиданные ошибки"""
+        logger.error(f"Unexpected error during {operation}: {str(error)}", exc_info=True)
+        
+        error_message = f"❌ Произошла неожиданная ошибка при выполнении {operation}.\n\n"
+        error_message += "🛠️ Обратитесь к администратору системы."
+        
+        keyboard = KeyboardBuilder.create_back_button()
+        
+        if update.callback_query:
+            try:
+                await update.callback_query.edit_message_text(
+                    text=error_message,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            except Exception as edit_error:
+                logger.error(f"Error editing message: {edit_error}")
+                await update.callback_query.answer("❌ Критическая ошибка")
+        else:
+            await update.message.reply_text(
+                text=error_message,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        
+        return True
+
+# Кэширование данных пользователей
+class UserCache:
+    """Класс для кэширования данных пользователей"""
+    
+    def __init__(self, cache_ttl: int = 300):  # 5 минут по умолчанию
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_ttl = cache_ttl
+    
+    def _is_expired(self, timestamp: float) -> bool:
+        """Проверяет, истек ли срок кэша"""
+        return datetime.now().timestamp() - timestamp > self._cache_ttl
+    
+    async def get_user(self, uuid: str) -> Optional[Dict[str, Any]]:
+        """Получает пользователя из кэша или API"""
+        cache_key = f"user_{uuid}"
+        
+        if cache_key in self._cache:
+            cached_data = self._cache[cache_key]
+            if not self._is_expired(cached_data['timestamp']):
+                logger.debug(f"User {uuid} found in cache")
+                return cached_data['data']
+            else:
+                # Удаляем устаревшие данные
+                del self._cache[cache_key]
+        
+        # Периодически очищаем кэш (каждый 10-й запрос)
+        if len(self._cache) % 10 == 0:
+            self.cleanup_expired()
+        
+        # Получаем данные из API
+        try:
+            user_data = await UserAPI.get_user_by_uuid(uuid)
+            if user_data:
+                self._cache[cache_key] = {
+                    'data': user_data,
+                    'timestamp': datetime.now().timestamp()
+                }
+                logger.debug(f"User {uuid} cached")
+            return user_data
+        except Exception as e:
+            logger.error(f"Error fetching user {uuid}: {e}")
+            return None
+    
+    async def get_all_users(self) -> Optional[list]:
+        """Получает всех пользователей из кэша или API"""
+        cache_key = "all_users"
+        
+        if cache_key in self._cache:
+            cached_data = self._cache[cache_key]
+            if not self._is_expired(cached_data['timestamp']):
+                logger.debug("All users found in cache")
+                return cached_data['data']
+            else:
+                del self._cache[cache_key]
+        
+        # Получаем данные из API
+        try:
+            response = await UserAPI.get_all_users()
+            users = []
+            
+            if isinstance(response, dict):
+                if 'users' in response:
+                    users = response['users'] or []
+                elif 'response' in response and isinstance(response['response'], dict) and 'users' in response['response']:
+                    users = response['response']['users'] or []
+            elif isinstance(response, list):
+                users = response
+            
+            if users:
+                self._cache[cache_key] = {
+                    'data': users,
+                    'timestamp': datetime.now().timestamp()
+                }
+                logger.debug(f"Cached {len(users)} users")
+            
+            return users
+        except Exception as e:
+            logger.error(f"Error fetching all users: {e}")
+            return None
+    
+    def invalidate_user(self, uuid: str):
+        """Инвалидирует кэш конкретного пользователя"""
+        cache_key = f"user_{uuid}"
+        if cache_key in self._cache:
+            del self._cache[cache_key]
+            logger.debug(f"Cache invalidated for user {uuid}")
+    
+    def invalidate_all_users(self):
+        """Инвалидирует кэш всех пользователей"""
+        self._cache.clear()
+        logger.debug("All users cache invalidated")
+    
+    def cleanup_expired(self):
+        """Очищает устаревшие записи из кэша"""
+        current_time = datetime.now().timestamp()
+        expired_keys = [
+            key for key, data in self._cache.items()
+            if current_time - data['timestamp'] > self._cache_ttl
+        ]
+        
+        for key in expired_keys:
+            del self._cache[key]
+        
+        if expired_keys:
+            logger.debug(f"Cleaned up {len(expired_keys)} expired cache entries")
+
+# Глобальный экземпляр кэша
+user_cache = UserCache()
+
+# Функция для ручной очистки кэша
+def cleanup_cache():
+    """Очищает устаревшие записи из кэша"""
+    try:
+        user_cache.cleanup_expired()
+        logger.debug("Cache cleanup completed")
+    except Exception as e:
+        logger.error(f"Error during cache cleanup: {e}")
+
+# Утилиты для работы с клавиатурами
+class KeyboardBuilder:
+    """Класс для создания клавиатур"""
+    
+    @staticmethod
+    def create_main_menu():
+        """Создает главное меню пользователей"""
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 Список всех пользователей", callback_data=CallbackData.LIST_USERS)],
+            [InlineKeyboardButton("🔍 Поиск пользователя", callback_data=CallbackData.SEARCH_USER)],
+            [InlineKeyboardButton("➕ Создать пользователя", callback_data=CallbackData.CREATE_USER)],
+            [InlineKeyboardButton("🔙 Назад в главное меню", callback_data=CallbackData.BACK_TO_MAIN)]
+        ])
+    
+    @staticmethod
+    def create_back_button(callback_data: str = CallbackData.BACK_TO_USERS):
+        """Создает кнопку 'Назад'"""
+        return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=callback_data)]])
+    
+    @staticmethod
+    def create_confirmation_buttons(confirm_callback: str, cancel_callback: str, confirm_text: str = "✅ Да", cancel_text: str = "❌ Отмена"):
+        """Создает кнопки подтверждения"""
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton(confirm_text, callback_data=confirm_callback)],
+            [InlineKeyboardButton(cancel_text, callback_data=cancel_callback)]
+        ])
+    
+    @staticmethod
+    def create_user_actions_keyboard(uuid: str, user_status: str = "ACTIVE"):
+        """Создает клавиатуру действий с пользователем"""
+        keyboard = [
+            [InlineKeyboardButton("📝 Редактировать", callback_data=f"{CallbackData.EDIT_USER}{uuid}")],
+            [InlineKeyboardButton("🔄 Сбросить трафик", callback_data=f"{CallbackData.RESET_TRAFFIC}{uuid}")],
+            [InlineKeyboardButton("📊 Статистика", callback_data=f"{CallbackData.USER_STATS}{uuid}")],
+            [InlineKeyboardButton("📱 Устройства HWID", callback_data=f"{CallbackData.USER_HWID}{uuid}")]
+        ]
+        if user_status == "ACTIVE":
+            keyboard.append([InlineKeyboardButton("🔴 Отключить", callback_data=f"{CallbackData.DISABLE_USER}{uuid}")])
+        else:
+            keyboard.append([InlineKeyboardButton("🟢 Включить", callback_data=f"{CallbackData.ENABLE_USER}{uuid}")])
+        keyboard.append([InlineKeyboardButton("🔄 Отозвать подписку", callback_data=f"{CallbackData.REVOKE_SUBSCRIPTION}{uuid}")])
+        keyboard.append([InlineKeyboardButton("🗑️ Удалить", callback_data=f"{CallbackData.DELETE_USER}{uuid}")])
+        keyboard.append([InlineKeyboardButton("🔙 Назад к списку", callback_data=CallbackData.BACK_TO_LIST)])
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def create_pagination_buttons(current_page: int, total_pages: int, callback_prefix: str = "page"):
+        """Создает кнопки пагинации"""
+        keyboard = []
+        
+        if current_page > 0:
+            keyboard.append(InlineKeyboardButton("◀️ Назад", callback_data=f"{callback_prefix}_{current_page - 1}"))
+        
+        if current_page < total_pages - 1:
+            keyboard.append(InlineKeyboardButton("Вперед ▶️", callback_data=f"{callback_prefix}_{current_page + 1}"))
+        
+        return keyboard
+
+# Дополнительные утилиты
+class UserUtils:
+    """Утилиты для работы с пользователями"""
+    
+    @staticmethod
+    def format_user_status(status: str) -> str:
+        """Форматирует статус пользователя"""
+        status_map = {
+            "ACTIVE": "✅ Активен",
+            "INACTIVE": "❌ Неактивен",
+            "EXPIRED": "⏰ Истек",
+            "SUSPENDED": "🚫 Заблокирован"
+        }
+        return status_map.get(status, f"❓ {status}")
+    
+    @staticmethod
+    def format_traffic_usage(used: int, limit: int) -> str:
+        """Форматирует использование трафика"""
+        if limit == 0:
+            return f"📊 {format_bytes(used)} / Безлимитный"
+        
+        percent = (used / limit) * 100
+        status_emoji = "🟢" if percent < 50 else "🟡" if percent < 90 else "🔴"
+        
+        return f"📊 {format_bytes(used)} / {format_bytes(limit)} ({percent:.1f}%) {status_emoji}"
+    
+    @staticmethod
+    def format_expiration_date(expire_at: str) -> str:
+        """Форматирует дату истечения"""
+        try:
+            expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+            days_left = (expire_date - datetime.now().astimezone()).days
+            
+            if days_left < 0:
+                return f"⏰ Истек {abs(days_left)} дней назад"
+            elif days_left == 0:
+                return "⏰ Истекает сегодня"
+            elif days_left <= 7:
+                return f"⚠️ Истекает через {days_left} дней"
+            else:
+                return f"📅 Истекает через {days_left} дней"
+        except Exception:
+            return f"📅 {expire_at[:10]}"
+    
+    @staticmethod
+    def get_user_summary(user: Dict[str, Any]) -> str:
+        """Создает краткое описание пользователя"""
+        lines = [
+            f"👤 *{escape_markdown(user.get('username', 'Без имени'))}*",
+            f"🆔 `{user.get('uuid', 'N/A')}`",
+            f"📊 {UserUtils.format_traffic_usage(user.get('usedTrafficBytes', 0), user.get('trafficLimitBytes', 0))}",
+            f"📅 {UserUtils.format_expiration_date(user.get('expireAt', ''))}",
+            f"📱 {UserUtils.format_user_status(user.get('status', 'UNKNOWN'))}"
+        ]
+        
+        if user.get('email'):
+            lines.append(f"📧 {escape_markdown(user['email'])}")
+        
+        if user.get('tag'):
+            lines.append(f"🏷️ {escape_markdown(user['tag'])}")
+        
+        return "\n".join(lines)
+
+# Массовые операции
+class BulkOperations:
+    """Класс для массовых операций с пользователями"""
+    
+    @staticmethod
+    async def bulk_disable_users(uuids: list[str]) -> Dict[str, bool]:
+        """Массовое отключение пользователей"""
+        results = {}
+        
+        for uuid in uuids:
+            try:
+                result = await UserAPI.disable_user(uuid)
+                results[uuid] = result
+                if result:
+                    user_cache.invalidate_user(uuid)
+            except Exception as e:
+                logger.error(f"Error disabling user {uuid}: {e}")
+                results[uuid] = False
+        
+        return results
+    
+    @staticmethod
+    async def bulk_enable_users(uuids: list[str]) -> Dict[str, bool]:
+        """Массовое включение пользователей"""
+        results = {}
+        
+        for uuid in uuids:
+            try:
+                result = await UserAPI.enable_user(uuid)
+                results[uuid] = result
+                if result:
+                    user_cache.invalidate_user(uuid)
+            except Exception as e:
+                logger.error(f"Error enabling user {uuid}: {e}")
+                results[uuid] = False
+        
+        return results
+    
+    @staticmethod
+    async def bulk_reset_traffic(uuids: list[str]) -> Dict[str, bool]:
+        """Массовый сброс трафика"""
+        results = {}
+        
+        for uuid in uuids:
+            try:
+                result = await UserAPI.reset_user_traffic(uuid)
+                results[uuid] = result
+                if result:
+                    user_cache.invalidate_user(uuid)
+            except Exception as e:
+                logger.error(f"Error resetting traffic for user {uuid}: {e}")
+                results[uuid] = False
+        
+        return results
+    
+    @staticmethod
+    def format_bulk_results(results: Dict[str, bool], operation: str) -> str:
+        """Форматирует результаты массовых операций"""
+        successful = sum(1 for success in results.values() if success)
+        total = len(results)
+        
+        message = f"📊 *Результаты массовой операции: {operation}*\n\n"
+        message += f"✅ Успешно: {successful}/{total}\n"
+        message += f"❌ Ошибок: {total - successful}/{total}\n\n"
+        
+        if successful < total:
+            failed_uuids = [uuid for uuid, success in results.items() if not success]
+            message += f"❌ Неудачные UUID: `{', '.join(failed_uuids[:5])}`"
+            if len(failed_uuids) > 5:
+                message += f" и еще {len(failed_uuids) - 5}..."
+        
+        return message
+
+# Валидаторы данных
+class DataValidators:
+    """Класс для валидации данных"""
+    
+    @staticmethod
+    def validate_username(username: str) -> tuple[bool, str]:
+        """Валидация имени пользователя"""
+        if not username:
+            return False, "Имя пользователя не может быть пустым"
+        
+        if not re.match(r"^[a-zA-Z0-9_-]{6,34}$", username):
+            return False, "Имя пользователя должно содержать только буквы, цифры, подчеркивания и дефисы. Длина от 6 до 34 символов"
+        
+        return True, ""
+    
+    @staticmethod
+    def validate_email(email: str) -> tuple[bool, str]:
+        """Валидация email"""
+        if not email:
+            return True, ""  # Email не обязателен
+        
+        if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
+            return False, "Неверный формат email"
+        
+        return True, ""
+    
+    @staticmethod
+    def validate_telegram_id(telegram_id: str) -> tuple[bool, str, int]:
+        """Валидация Telegram ID"""
+        if not telegram_id:
+            return True, "", 0  # Telegram ID не обязателен
+        
+        try:
+            tid = int(telegram_id)
+            if tid <= 0:
+                return False, "Telegram ID должен быть положительным числом", 0
+            return True, "", tid
+        except ValueError:
+            return False, "Telegram ID должен быть целым числом", 0
+    
+    @staticmethod
+    def validate_date(date_str: str) -> tuple[bool, str, str]:
+        """Валидация даты"""
+        if not date_str:
+            return True, "", ""  # Дата не обязательна
+        
+        try:
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            formatted_date = date_obj.strftime("%Y-%m-%dT00:00:00.000Z")
+            return True, "", formatted_date
+        except ValueError:
+            return False, "Неверный формат даты. Используйте YYYY-MM-DD", ""
+    
+    @staticmethod
+    def validate_traffic_limit(traffic_str: str) -> tuple[bool, str, int]:
+        """Валидация лимита трафика"""
+        if not traffic_str:
+            return True, "", 0  # Лимит не обязателен
+        
+        try:
+            traffic = int(traffic_str)
+            if traffic < 0:
+                return False, "Лимит трафика не может быть отрицательным", 0
+            return True, "", traffic
+        except ValueError:
+            return False, "Лимит трафика должен быть целым числом", 0
+    
+    @staticmethod
+    def validate_device_limit(device_str: str) -> tuple[bool, str, int]:
+        """Валидация лимита устройств"""
+        if not device_str:
+            return True, "", 0  # Лимит не обязателен
+        
+        try:
+            devices = int(device_str)
+            if devices < 0:
+                return False, "Лимит устройств не может быть отрицательным", 0
+            return True, "", devices
+        except ValueError:
+            return False, "Лимит устройств должен быть целым числом", 0
+
+@require_authorization
+@log_user_action("show_users_menu")
 async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show users menu"""
-    keyboard = [
-        [InlineKeyboardButton("📋 Список всех пользователей", callback_data="list_users")],
-        [InlineKeyboardButton("🔍 Поиск пользователя", callback_data="search_user")],
-        [InlineKeyboardButton("➕ Создать пользователя", callback_data="create_user")],
-        [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = KeyboardBuilder.create_main_menu()
 
     message = (
         "👥 *Управление пользователями*\n\n"
@@ -41,24 +647,21 @@ async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Markdown"
     )
 
+@require_authorization
+@log_user_action("handle_users_menu")
 async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle users menu selection"""
-    # Проверяем авторизацию
-    if not check_authorization(update.effective_user):
-        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
-        return ConversationHandler.END
-    
     query = update.callback_query
     await query.answer()
 
     data = query.data
 
-    if data == "list_users":
+    if data == CallbackData.LIST_USERS:
         await list_users(update, context)
         return SELECTING_USER
 
-    elif data == "search_user":
-        back_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_users")]])
+    elif data == CallbackData.SEARCH_USER:
+        back_markup = KeyboardBuilder.create_back_button()
         search_prompt = (
             "🔍 Введите текст для поиска пользователя:\n\n"
             "💡 *Пример:* имя, часть описания, email, тег, UUID или Telegram ID."
@@ -71,15 +674,16 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data["search_type"] = "generic"
         return WAITING_FOR_INPUT
-    elif data == "create_user" or data == "menu_create_user":
+        
+    elif data in (CallbackData.CREATE_USER, "menu_create_user"):
         await start_create_user(update, context)
         return CREATE_USER_FIELD
 
-    elif data == "back_to_users":
+    elif data == CallbackData.BACK_TO_USERS:
         await show_users_menu(update, context)
         return USER_MENU
 
-    elif data == "back_to_main":
+    elif data == CallbackData.BACK_TO_MAIN:
         await show_main_menu(update, context)
         return MAIN_MENU
 
@@ -88,19 +692,12 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def search_users_by_term(term: str):
     """Fetch users and filter by generic term"""
     try:
-        response = await UserAPI.get_all_users()
+        users = await user_cache.get_all_users()
+        if not users:
+            return []
     except Exception as e:
         logger.error(f"Error fetching users for search: {e}")
         return []
-
-    users = []
-    if isinstance(response, dict):
-        if 'users' in response:
-            users = response['users'] or []
-        elif 'response' in response and isinstance(response['response'], dict) and 'users' in response['response']:
-            users = response['response']['users'] or []
-    elif isinstance(response, list):
-        users = response
 
     term_lower = term.lower()
     matches = []
@@ -355,7 +952,7 @@ async def handle_user_selection(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Show user details (safe formatting to avoid Markdown parse issues)"""
-    user = await UserAPI.get_user_by_uuid(uuid)
+    user = await user_cache.get_user(uuid)
     context.user_data.pop("search_type", None)
     context.user_data.pop("waiting_for", None)
     if not user:
@@ -963,7 +1560,7 @@ async def show_template_selection(update: Update, context: ContextTypes.DEFAULT_
     # Добавляем кнопки управления
     keyboard.extend([
         [InlineKeyboardButton("⚙️ Создать вручную", callback_data="create_manual")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="back_to_users")]
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
     ])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1008,7 +1605,7 @@ async def handle_template_selection(update: Update, context: ContextTypes.DEFAUL
         [InlineKeyboardButton("✅ Использовать шаблон", callback_data=f"use_template_{template_name}")],
         [InlineKeyboardButton("⚙️ Настроить дополнительно", callback_data=f"customize_template_{template_name}")],
         [InlineKeyboardButton("🔙 Выбрать другой шаблон", callback_data="back_to_templates")],
-        [InlineKeyboardButton("❌ Отмена", callback_data="back_to_users")]
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1375,10 +1972,10 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             await ask_for_field(update, context)
             return CREATE_USER_FIELD
         
-        elif data == "cancel_create":
-            # Cancel user creation
-            await show_users_menu(update, context)
-            return USER_MENU
+        # elif data == "cancel_create":
+        #     # Cancel user creation - handled by separate handler
+        #     await show_users_menu(update, context)
+        #     return USER_MENU
         
         elif data == "back_to_main":
             # Return to main menu
@@ -2277,5 +2874,244 @@ async def execute_user_deletion(update: Update, context: ContextTypes.DEFAULT_TY
         )
         
         return USER_MENU
-    
 
+
+async def start_edit_user(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid: str):
+    """Start editing a user"""
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        return ConversationHandler.END
+    
+    # Получаем данные пользователя
+    user = await UserAPI.get_user_by_uuid(uuid)
+    if not user:
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_users")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.callback_query.edit_message_text(
+            "❌ Пользователь не найден или ошибка при получении данных.",
+            reply_markup=reply_markup
+        )
+        return USER_MENU
+    
+    # Сохраняем данные пользователя для редактирования
+    context.user_data["edit_user"] = user
+    context.user_data["edit_field"] = None
+    
+    # Создаем меню выбора поля для редактирования
+    keyboard = []
+    for field_key, field_name in USER_FIELDS.items():
+        if field_key in user:  # Показываем только поля, которые есть у пользователя
+            keyboard.append([InlineKeyboardButton(f"📝 {field_name}", callback_data=f"edit_field_{field_key}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад к пользователю", callback_data=f"view_{uuid}")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = f"📝 *Редактирование пользователя {escape_markdown(user['username'])}*\n\n"
+    message += "Выберите поле для редактирования:"
+    
+    await update.callback_query.edit_message_text(
+        text=message,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    
+    return EDIT_USER
+
+async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle edit field selection"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    if data.startswith("edit_field_"):
+        field = data[11:]  # убираем "edit_field_"
+        user = context.user_data["edit_user"]
+        
+        if field not in user:
+            await query.edit_message_text("❌ Поле не найдено в данных пользователя.")
+            return EDIT_USER
+        
+        # Сохраняем выбранное поле
+        context.user_data["edit_field"] = field
+        field_name = USER_FIELDS.get(field, field)
+        
+        # Показываем текущее значение и запрашиваем новое
+        current_value = user[field]
+        if field == "trafficLimitBytes":
+            from modules.utils.formatters import format_bytes
+            display_value = "Безлимитный" if current_value == 0 else format_bytes(current_value)
+        elif field == "expireAt":
+            display_value = current_value[:10] if current_value else "Не указана"
+        else:
+            display_value = str(current_value) if current_value else "Не указано"
+        
+        message = f"📝 *Редактирование поля: {field_name}*\n\n"
+        message += f"Текущее значение: `{display_value}`\n\n"
+        message += f"Введите новое значение для поля {field_name}:"
+        
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад к выбору поля", callback_data=f"edit_{user['uuid']}")],
+            [InlineKeyboardButton("❌ Отмена", callback_data=f"view_{user['uuid']}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        return EDIT_VALUE
+    
+    elif data.startswith("view_"):
+        uuid = data.split("_")[1]
+        await show_user_details(update, context, uuid)
+        return SELECTING_USER
+    
+    elif data == "back_to_users":
+        await show_users_menu(update, context)
+        return USER_MENU
+    
+    return EDIT_USER
+
+async def handle_edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle edit field value input"""
+    if not update.message:
+        return EDIT_VALUE
+    
+    field = context.user_data.get("edit_field")
+    user = context.user_data.get("edit_user")
+    
+    if not field or not user:
+        await update.message.reply_text("❌ Ошибка: данные для редактирования не найдены.")
+        return USER_MENU
+    
+    value = update.message.text.strip()
+    
+    # Process the value based on the field
+    if field == "expireAt":
+        try:
+            # Validate date format
+            date_obj = datetime.strptime(value, "%Y-%m-%d")
+            value = date_obj.strftime("%Y-%m-%dT00:00:00.000Z")
+        except ValueError:
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "❌ Неверный формат даты. Используйте YYYY-MM-DD.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            return EDIT_USER
+    
+    elif field == "trafficLimitBytes":
+        try:
+            value = int(value)
+            if value < 0:
+                raise ValueError("Traffic limit cannot be negative")
+        except ValueError:
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "❌ Неверный формат числа. Введите целое число >= 0.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            return EDIT_USER
+    
+    elif field == "telegramId":
+        try:
+            value = int(value)
+        except ValueError:
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "❌ Неверный формат Telegram ID. Введите целое число.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            return EDIT_USER
+            
+    elif field == "hwidDeviceLimit":
+        try:
+            value = int(value)
+            if value < 0:
+                raise ValueError("Device limit cannot be negative")
+        except ValueError:
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "❌ Неверный формат числа. Введите целое число >= 0.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            return EDIT_USER
+    
+    # Update the user with the new value
+    update_data = {field: value}
+    
+    # Если устанавливается лимит устройств > 0, добавляем в обновляемые данные trafficLimitStrategy=NO_RESET
+    if field == "hwidDeviceLimit" and value > 0:
+        update_data["trafficLimitStrategy"] = "NO_RESET"
+        logger.info(f"Auto-setting trafficLimitStrategy=NO_RESET when setting hwidDeviceLimit to {value} for user {user['uuid']}")
+    result = await UserAPI.update_user(user["uuid"], update_data)
+    
+    if result:
+        keyboard = [
+            [InlineKeyboardButton("👁️ Просмотр пользователя", callback_data=f"view_{user['uuid']}")],
+            [InlineKeyboardButton("📝 Продолжить редактирование", callback_data=f"edit_{user['uuid']}")],
+            [InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_list")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"✅ Поле {field} успешно обновлено.",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    else:
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"❌ Не удалось обновить поле {field}.",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    
+    return EDIT_USER
+
+async def handle_cancel_user_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle cancel user creation"""
+    query = update.callback_query
+    await query.answer("Создание пользователя отменено")
+    
+    # Очищаем контекст создания пользователя
+    keys_to_remove = [
+        'create_user', 'create_user_fields', 'current_field_index', 
+        'using_template', 'template_name', 'selected_template',
+        'search_type', 'waiting_for'
+    ]
+    
+    for key in keys_to_remove:
+        context.user_data.pop(key, None)
+    
+    # Возвращаемся в меню пользователей
+    await show_users_menu(update, context)
+    return USER_MENU
