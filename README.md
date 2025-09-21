@@ -12,6 +12,7 @@ This bot was created by the author of
 - [openode.xyz](https://openode.xyz)
 - [neonode.cc](https://neonode.cc)
 - [Github - Case211](https://github.com/Case211)
+- [Telegram](https://t.me/ispanec_nn)
 
 ## ✨ Features
 
