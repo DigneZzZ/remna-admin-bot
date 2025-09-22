@@ -79,17 +79,7 @@ python main.py
 - `SEARCH_MIN_LENGTH` (число)
 
 eGames cookie-auth (опционально):
-- `EGAMES_COOKIE_ENABLE` (true/false) — включить авторизацию по cookie
-- `EGAMES_COOKIE_NAME` — имя cookie
-- `EGAMES_COOKIE_VALUE` — значение cookie
-- `EGAMES_COOKIE_DOMAIN` — домен (например, `panel.example.com`), можно пусто
-- `EGAMES_COOKIE_PATH` — путь (обычно `/`)
-- `EGAMES_COOKIE_SECURE` — `true` при HTTPS
-
-Примечания по cookie:
-- Если `EGAMES_COOKIE_ENABLE=true` и задана кука, клиент отправляет её в каждом запросе.
-- Если токен не задан и включена кука — заголовок `Authorization` удаляется.
-- `API_BASE_URL` должен соответствовать домену, для которого действует кука.
+- `REMNAWAVE_SECRET_KEY=` — Если значение присвоено то включает авторизацию по cookie
 
 ## Использование
 - Запустите бота и отправьте `/start`.
