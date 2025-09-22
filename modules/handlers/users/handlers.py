@@ -2453,7 +2453,7 @@ async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 parse_mode="Markdown"
             )
         
-        return MAIN_MENU
+        return SELECTING_USER
     else:
         keyboard = [
             [InlineKeyboardButton("🔄 Попробовать снова", callback_data="create_user")],
