@@ -46,11 +46,10 @@ def get_client_kwargs():
         # Best-effort cookie; domain/path help but aren't strictly required by httpx client
         jar.set(EGAMES_COOKIE_NAME, EGAMES_COOKIE_VALUE, domain=EGAMES_COOKIE_DOMAIN or None, path=EGAMES_COOKIE_PATH or "/", secure=EGAMES_COOKIE_SECURE)
         client_kwargs["cookies"] = jar
-        # If cookie auth is used and no token provided, drop empty Authorization header
-        if not API_TOKEN:
-            headers = client_kwargs["headers"]
-            headers.pop("Authorization", None)
-            client_kwargs["headers"] = headers
+        # When cookie auth is used, rely solely on cookie and remove Authorization header
+        headers = client_kwargs["headers"]
+        headers.pop("Authorization", None)
+        client_kwargs["headers"] = headers
 
     return client_kwargs
 
