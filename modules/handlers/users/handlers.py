@@ -655,6 +655,10 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
+    try:
+        logger.debug(f"handle_user_selection received callback data: {data}")
+    except Exception:
+        pass
 
     if data == CallbackData.LIST_USERS:
         await list_users(update, context)
@@ -935,6 +939,10 @@ async def handle_user_selection(update: Update, context: ContextTypes.DEFAULT_TY
 
     elif data.startswith("view_"):
         uuid = data.split("_")[1]
+        try:
+            logger.debug(f"Opening user details for uuid={uuid}")
+        except Exception:
+            pass
         await show_user_details(update, context, uuid)
         
     elif data.startswith("add_hwid_"):
@@ -952,6 +960,10 @@ async def handle_user_selection(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Show user details (safe formatting to avoid Markdown parse issues)"""
+    try:
+        logger.debug(f"show_user_details called for uuid={uuid}")
+    except Exception:
+        pass
     user = await user_cache.get_user(uuid)
     context.user_data.pop("search_type", None)
     context.user_data.pop("waiting_for", None)
@@ -980,7 +992,14 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         )
     except Exception as e:
         logger.error(f"Error sending user details: {e}")
-        await update.callback_query.answer("❌ Ошибка при отображении данных")
+        try:
+            await update.callback_query.edit_message_caption(
+                caption=message,
+                reply_markup=keyboard
+            )
+        except Exception as e2:
+            logger.error(f"Fallback to edit_message_caption failed: {e2}")
+            await update.callback_query.answer("❌ Ошибка при отображении данных")
 
     context.user_data["current_user"] = user
     return SELECTING_USER
