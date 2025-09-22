@@ -2,14 +2,19 @@ import httpx
 import logging
 import json
 import asyncio
-from modules.config import API_BASE_URL, API_TOKEN
+from modules.config import (
+    API_BASE_URL, API_TOKEN,
+    EGAMES_COOKIE_ENABLE, EGAMES_COOKIE_NAME, EGAMES_COOKIE_VALUE, EGAMES_COOKIE_DOMAIN,
+    EGAMES_COOKIE_SECURE, EGAMES_COOKIE_PATH
+)
 
 logger = logging.getLogger(__name__)
 
 def get_headers():
     """Get headers for API requests"""
     return {
-        "Authorization": f"Bearer {API_TOKEN}",
+        # Keep bearer token header; if cookie auth is used, server may ignore it
+        "Authorization": f"Bearer {API_TOKEN}" if API_TOKEN else "",
         "Content-Type": "application/json",
         "Accept": "application/json",
         "User-Agent": "RemnaBot/1.0",
@@ -18,7 +23,7 @@ def get_headers():
 
 def get_client_kwargs():
     """Get httpx client configuration"""
-    return {
+    client_kwargs = {
         "timeout": 30.0,  # Reduced timeout for faster failure detection
         "verify": True,  # Enable SSL verification for HTTPS
         "headers": get_headers(),
@@ -34,6 +39,20 @@ def get_client_kwargs():
         "cert": None,  # No client certificate
         "trust_env": False  # Don't use environment variables for proxy settings
     }
+
+    # If eGames cookie is configured, attach it via CookieJar
+    if EGAMES_COOKIE_ENABLE and EGAMES_COOKIE_NAME and EGAMES_COOKIE_VALUE:
+        jar = httpx.Cookies()
+        # Best-effort cookie; domain/path help but aren't strictly required by httpx client
+        jar.set(EGAMES_COOKIE_NAME, EGAMES_COOKIE_VALUE, domain=EGAMES_COOKIE_DOMAIN or None, path=EGAMES_COOKIE_PATH or "/", secure=EGAMES_COOKIE_SECURE)
+        client_kwargs["cookies"] = jar
+        # If cookie auth is used and no token provided, drop empty Authorization header
+        if not API_TOKEN:
+            headers = client_kwargs["headers"]
+            headers.pop("Authorization", None)
+            client_kwargs["headers"] = headers
+
+    return client_kwargs
 
 class RemnaAPI:
     """API client for Remnawave API using httpx"""

@@ -11,6 +11,13 @@ logger = logging.getLogger(__name__)
 # API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://remnawave:3000/api")
 API_TOKEN = os.getenv("REMNAWAVE_API_TOKEN")
+# eGames cookie-based protection support
+EGAMES_COOKIE_ENABLE = os.getenv("EGAMES_COOKIE_ENABLE", "false").lower() == "true"
+EGAMES_COOKIE_NAME = os.getenv("EGAMES_COOKIE_NAME", "")
+EGAMES_COOKIE_VALUE = os.getenv("EGAMES_COOKIE_VALUE", "")
+EGAMES_COOKIE_DOMAIN = os.getenv("EGAMES_COOKIE_DOMAIN", "")
+EGAMES_COOKIE_SECURE = os.getenv("EGAMES_COOKIE_SECURE", "true").lower() == "true"
+EGAMES_COOKIE_PATH = os.getenv("EGAMES_COOKIE_PATH", "/")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Parse admin user IDs with detailed logging
