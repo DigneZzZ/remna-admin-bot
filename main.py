@@ -139,14 +139,14 @@ def main():
         try:
             logger.info(f"Starting bot polling (attempt {retry_count + 1}/{max_retries})")
             logger.info("Bot configuration:")
-            logger.info(f"  - Poll interval: 5.0s")
+            logger.info(f"  - Poll interval: 0.5s")
             logger.info(f"  - Timeout: 30s")
             logger.info(f"  - Bootstrap retries: 5")
             logger.info(f"  - Drop pending updates: True")
             
             # Run polling - production configuration
             application.run_polling(
-                poll_interval=5.0,
+                poll_interval=0.5,
                 timeout=30,
                 bootstrap_retries=5,
                 read_timeout=30,
