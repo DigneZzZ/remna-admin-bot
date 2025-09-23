@@ -17,6 +17,17 @@ class SystemAPI:
     async def get_nodes_statistics():
         """Get nodes statistics"""
         return await RemnaAPI.get("system/stats/nodes")
+
+    @staticmethod
+    async def get_security_audit():
+        """Run security audit (firewall/open ports/SSH settings)"""
+        response = await RemnaAPI.get("system/security/audit")
+
+        if isinstance(response, dict):
+            if 'response' in response and isinstance(response['response'], dict):
+                return response['response']
+        return response
+
     
     @staticmethod
     async def get_xray_config():
