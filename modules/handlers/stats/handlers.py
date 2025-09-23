@@ -16,7 +16,7 @@ async def show_stats_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 Общая статистика", callback_data="system_stats")],
         [InlineKeyboardButton("📈 Статистика трафика", callback_data="bandwidth_stats")],
         [InlineKeyboardButton("🖥️ Статистика серверов", callback_data="nodes_stats")],
-        [InlineKeyboardButton("Проверка безопасности", callback_data="security_audit")],
+        [InlineKeyboardButton("🔐 Проверка безопасности", callback_data="security_audit")],
         [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
