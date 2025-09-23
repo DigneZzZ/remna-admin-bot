@@ -1,12 +1,7 @@
 import httpx
 import logging
-import json
 import asyncio
-from modules.config import (
-    API_BASE_URL, API_TOKEN,
-    EGAMES_COOKIE_ENABLE, EGAMES_COOKIE_NAME, EGAMES_COOKIE_VALUE, EGAMES_COOKIE_DOMAIN,
-    EGAMES_COOKIE_SECURE, EGAMES_COOKIE_PATH, EGAMES_COOKIE_ACTIVE
-)
+from modules.config import API_BASE_URL, API_TOKEN
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +35,6 @@ def get_client_kwargs():
         "cert": None,  # No client certificate
         "trust_env": False  # Don't use environment variables for proxy settings
     }
-
-    # If eGames cookie is configured, attach it via CookieJar
-    if EGAMES_COOKIE_ACTIVE:
-        jar = httpx.Cookies()
-        jar.set(
-            EGAMES_COOKIE_NAME,
-            EGAMES_COOKIE_VALUE,
-            domain=EGAMES_COOKIE_DOMAIN or None,
-            path=EGAMES_COOKIE_PATH or "/",
-            secure=EGAMES_COOKIE_SECURE
-        )
-        client_kwargs["cookies"] = jar
-        logger.debug("eGames cookie auth attached to requests (domain=%s, path=%s)", EGAMES_COOKIE_DOMAIN or "<auto>", EGAMES_COOKIE_PATH or "/")
 
     return client_kwargs
 

@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
 import logging
-from urllib.parse import urlparse
 
 # Load environment variables
 load_dotenv()
@@ -12,43 +11,6 @@ logger = logging.getLogger(__name__)
 # API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://remnawave:3000/api")
 API_TOKEN = os.getenv("REMNAWAVE_API_TOKEN")
-# eGames cookie-based protection support
-EGAMES_COOKIE_ENABLE = os.getenv("EGAMES_COOKIE_ENABLE", "false").lower() == "true"
-EGAMES_COOKIE_NAME = os.getenv("EGAMES_COOKIE_NAME", "")
-EGAMES_COOKIE_VALUE = os.getenv("EGAMES_COOKIE_VALUE", "")
-EGAMES_COOKIE_DOMAIN = os.getenv("EGAMES_COOKIE_DOMAIN", "")
-EGAMES_COOKIE_SECURE = os.getenv("EGAMES_COOKIE_SECURE", "true").lower() == "true"
-EGAMES_COOKIE_PATH = os.getenv("EGAMES_COOKIE_PATH", "/")
-
-# Single-ENV secret for eGames panels: REMNAWAVE_SECRET_KEY="NAME:VALUE" or just "VALUE"
-REMNAWAVE_SECRET_KEY = os.getenv("REMNAWAVE_SECRET_KEY", "").strip()
-if REMNAWAVE_SECRET_KEY:
-    try:
-        if ":" in REMNAWAVE_SECRET_KEY:
-            parsed_name, parsed_value = REMNAWAVE_SECRET_KEY.split(":", 1)
-            parsed_name = parsed_name.strip()
-            parsed_value = parsed_value.strip()
-        else:
-            parsed_name = "REMNAWAVE_SECRET"
-            parsed_value = REMNAWAVE_SECRET_KEY
-        if parsed_name and parsed_value:
-            EGAMES_COOKIE_NAME = parsed_name
-            EGAMES_COOKIE_VALUE = parsed_value
-            EGAMES_COOKIE_ENABLE = True
-            logger.info("REMNAWAVE_SECRET_KEY detected: cookie auth enabled via single ENV var")
-        else:
-            logger.error("REMNAWAVE_SECRET_KEY provided but could not parse name/value")
-    except Exception as e:
-        logger.error(f"Failed to parse REMNAWAVE_SECRET_KEY: {e}")
-EGAMES_COOKIE_PATH = EGAMES_COOKIE_PATH or "/"
-EGAMES_COOKIE_ACTIVE = EGAMES_COOKIE_ENABLE and EGAMES_COOKIE_NAME and EGAMES_COOKIE_VALUE
-
-if EGAMES_COOKIE_ACTIVE:
-    if not EGAMES_COOKIE_DOMAIN:
-        parsed_url = urlparse(API_BASE_URL)
-        if parsed_url.hostname:
-            EGAMES_COOKIE_DOMAIN = parsed_url.hostname
-    logger.info("eGames cookie auth enabled via environment configuration")
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
