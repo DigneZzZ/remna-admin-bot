@@ -1,7 +1,7 @@
 import httpx
 import logging
 import asyncio
-from modules.config import API_BASE_URL, API_TOKEN
+from modules.config import API_BASE_URL, API_TOKEN, API_COOKIES
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,11 @@ def get_client_kwargs():
         "cert": None,  # No client certificate
         "trust_env": False  # Don't use environment variables for proxy settings
     }
+
+
+    if API_COOKIES:
+        client_kwargs["cookies"] = API_COOKIES
+        logger.debug("Configured API cookies: %s", ", ".join(API_COOKIES.keys()))
 
     return client_kwargs
 

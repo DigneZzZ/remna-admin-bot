@@ -1,12 +1,54 @@
 import os
 from dotenv import load_dotenv
 import logging
+import json
 
 # Load environment variables
 load_dotenv()
 
 # Set up logging for config
 logger = logging.getLogger(__name__)
+
+def _parse_cookie_header(value: str) -> dict:
+    """Parse a raw Cookie header string into a mapping."""
+    result = {}
+    for part in value.split(";"):
+        name, _, raw_value = part.strip().partition("=")
+        if name and raw_value:
+            result[name] = raw_value
+    return result
+
+def _load_api_cookies(raw_value: str) -> dict:
+    """Load cookie configuration supplied via environment variables."""
+    if not raw_value:
+        return {}
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError:
+        logger.debug("Cookies env value is not JSON, falling back to header format.")
+        return _parse_cookie_header(raw_value)
+    else:
+        if isinstance(parsed, dict):
+            return {str(name): str(value) for name, value in parsed.items() if name and value is not None}
+        if isinstance(parsed, list):
+            cookies = {}
+            for item in parsed:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name")
+                value = item.get("value")
+                if name and value is not None:
+                    cookies[str(name)] = str(value)
+            if cookies:
+                return cookies
+        logger.error("Unsupported cookie configuration. Provide JSON object or cookie header string.")
+        return {}
+
+_raw_cookies = os.getenv("REMNAWAVE_COOKIES") or os.getenv("COOKIES", "")
+API_COOKIES = _load_api_cookies(_raw_cookies)
+
+if _raw_cookies and not API_COOKIES:
+    logger.warning("Cookie configuration is set but no valid cookies were parsed.")
 
 # API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://remnawave:3000/api")
