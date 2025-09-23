@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from modules.config import MAIN_MENU, STATS_MENU
 from modules.api.system import SystemAPI
 from modules.api.nodes import NodeAPI
-from modules.utils.formatters import format_system_stats, format_bandwidth_stats, format_bytes, format_nodes_stats, format_security_audit
+from modules.utils.formatters import format_system_stats, format_bandwidth_stats, format_bytes, format_nodes_stats
 from modules.handlers.core.start import show_main_menu
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,6 @@ async def show_stats_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 Общая статистика", callback_data="system_stats")],
         [InlineKeyboardButton("📈 Статистика трафика", callback_data="bandwidth_stats")],
         [InlineKeyboardButton("🖥️ Статистика серверов", callback_data="nodes_stats")],
-        [InlineKeyboardButton("🔐 Проверка безопасности", callback_data="security_audit")],
         [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -45,9 +44,6 @@ async def handle_stats_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif data == "nodes_stats":
         return await show_nodes_stats(update, context)
-
-    elif data == "security_audit":
-        return await show_security_audit(update, context)
 
     elif data == "back_to_stats":
         await show_stats_menu(update, context)
@@ -192,61 +188,3 @@ async def show_nodes_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup
         )
         return STATS_MENU
-
-
-
-
-async def show_security_audit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Run security audit and display results."""
-    query = update.callback_query
-    await query.answer()
-
-    loading_message = "🔍 Выполняем проверку безопасности..."
-    await query.edit_message_text(loading_message)
-
-    try:
-        report = await SystemAPI.get_security_audit()
-    except Exception as exc:
-        logger.error("Error while requesting security audit: %s", exc, exc_info=True)
-        report = None
-
-    if not report:
-        keyboard = [
-            [InlineKeyboardButton("🔄 Повторить", callback_data="security_audit")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            text="⚠️ Не удалось получить результаты проверки безопасности.",
-            reply_markup=reply_markup
-        )
-        return STATS_MENU
-
-    try:
-        message = format_security_audit(report)
-    except Exception as exc:
-        logger.error("Error formatting security audit: %s", exc, exc_info=True)
-        keyboard = [
-            [InlineKeyboardButton("🔄 Повторить", callback_data="security_audit")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            text=f"⚠️ Ошибка при подготовке отчёта: {exc}",
-            reply_markup=reply_markup
-        )
-        return STATS_MENU
-
-    keyboard = [
-        [InlineKeyboardButton("🔄 Обновить", callback_data="security_audit")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await query.edit_message_text(
-        text=message,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-
-    return STATS_MENU
