@@ -78,8 +78,9 @@ python main.py
 - `ENABLE_PARTIAL_SEARCH` (true/false)
 - `SEARCH_MIN_LENGTH` (число)
 
-eGames cookie-auth (опционально):
-- `REMNAWAVE_SECRET_KEY=` — Если значение присвоено то включает авторизацию по cookie
+eGames cookie-auth (optional):
+- `EGAMES_COOKIE_ENABLE`, `EGAMES_COOKIE_NAME`, `EGAMES_COOKIE_VALUE`, `EGAMES_COOKIE_DOMAIN`, `EGAMES_COOKIE_PATH`, `EGAMES_COOKIE_SECURE` — задают параметры cookie, которую выставляет remnawave-reverse-proxy. Включайте и заполняйте их вручную, если нужно указать каждую часть.
+- `REMNAWAVE_SECRET_KEY` — короткий вариант, принимает `NAME:VALUE` или просто `VALUE` и автоматически включает авторизацию по cookie (подходит для скрипта reverse-proxy).
 
 ## Использование
 - Запустите бота и отправьте `/start`.

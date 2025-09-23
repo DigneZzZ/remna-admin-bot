@@ -90,6 +90,7 @@ from modules.handlers.core.conversation import create_conversation_handler
 def main():
     # Load environment variables
     load_dotenv()
+    from modules.config import EGAMES_COOKIE_ACTIVE, EGAMES_COOKIE_DOMAIN
     
     logger.info("Starting RemnaWave Telegram Bot...")
     
@@ -102,14 +103,28 @@ def main():
     logger.info(f"Log level: {os.getenv('LOG_LEVEL', 'ERROR')}")
     logger.info(f"Admin user IDs: {admin_user_ids}")
     
+    cookie_auth_enabled = EGAMES_COOKIE_ACTIVE
+    if cookie_auth_enabled:
+        effective_domain = EGAMES_COOKIE_DOMAIN or "API host"
+        logger.info(f"eGames cookie auth enabled for reverse proxy compatibility (domain: {effective_domain})")
+    else:
+        logger.info("eGames cookie auth disabled")
+    
     # Force flush to ensure logs are written
     sys.stdout.flush()
     sys.stderr.flush()
-    # Environment check - only errors in production
-    if not api_token:
-        logger.error("REMNAWAVE_API_TOKEN environment variable is not set")
+    
+    if not api_token and not cookie_auth_enabled:
+        logger.error("Configure REMNAWAVE_API_TOKEN or eGames cookie auth to allow the bot to access the panel API")
         return
-
+    
+    if api_token and cookie_auth_enabled:
+        logger.info("Both API token and eGames cookie auth configured; bot will send both for compatibility")
+    elif api_token:
+        logger.info("Using API token authentication for Remnawave API")
+    else:
+        logger.info("Using eGames cookie auth for Remnawave API")
+    
     if not bot_token:
         logger.error("TELEGRAM_BOT_TOKEN environment variable is not set")
         return

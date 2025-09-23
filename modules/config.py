@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 import logging
+from urllib.parse import urlparse
 
 # Load environment variables
 load_dotenv()
@@ -39,6 +40,16 @@ if REMNAWAVE_SECRET_KEY:
             logger.error("REMNAWAVE_SECRET_KEY provided but could not parse name/value")
     except Exception as e:
         logger.error(f"Failed to parse REMNAWAVE_SECRET_KEY: {e}")
+EGAMES_COOKIE_PATH = EGAMES_COOKIE_PATH or "/"
+EGAMES_COOKIE_ACTIVE = EGAMES_COOKIE_ENABLE and EGAMES_COOKIE_NAME and EGAMES_COOKIE_VALUE
+
+if EGAMES_COOKIE_ACTIVE:
+    if not EGAMES_COOKIE_DOMAIN:
+        parsed_url = urlparse(API_BASE_URL)
+        if parsed_url.hostname:
+            EGAMES_COOKIE_DOMAIN = parsed_url.hostname
+    logger.info("eGames cookie auth enabled via environment configuration")
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Parse admin user IDs with detailed logging

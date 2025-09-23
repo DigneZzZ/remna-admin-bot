@@ -5,21 +5,22 @@ import asyncio
 from modules.config import (
     API_BASE_URL, API_TOKEN,
     EGAMES_COOKIE_ENABLE, EGAMES_COOKIE_NAME, EGAMES_COOKIE_VALUE, EGAMES_COOKIE_DOMAIN,
-    EGAMES_COOKIE_SECURE, EGAMES_COOKIE_PATH
+    EGAMES_COOKIE_SECURE, EGAMES_COOKIE_PATH, EGAMES_COOKIE_ACTIVE
 )
 
 logger = logging.getLogger(__name__)
 
 def get_headers():
     """Get headers for API requests"""
-    return {
-        # Keep bearer token header; if cookie auth is used, server may ignore it
-        "Authorization": f"Bearer {API_TOKEN}" if API_TOKEN else "",
+    headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
         "User-Agent": "RemnaBot/1.0",
         "Connection": "close"
     }
+    if API_TOKEN:
+        headers["Authorization"] = f"Bearer {API_TOKEN}"
+    return headers
 
 def get_client_kwargs():
     """Get httpx client configuration"""
@@ -41,15 +42,17 @@ def get_client_kwargs():
     }
 
     # If eGames cookie is configured, attach it via CookieJar
-    if EGAMES_COOKIE_ENABLE and EGAMES_COOKIE_NAME and EGAMES_COOKIE_VALUE:
+    if EGAMES_COOKIE_ACTIVE:
         jar = httpx.Cookies()
-        # Best-effort cookie; domain/path help but aren't strictly required by httpx client
-        jar.set(EGAMES_COOKIE_NAME, EGAMES_COOKIE_VALUE, domain=EGAMES_COOKIE_DOMAIN or None, path=EGAMES_COOKIE_PATH or "/", secure=EGAMES_COOKIE_SECURE)
+        jar.set(
+            EGAMES_COOKIE_NAME,
+            EGAMES_COOKIE_VALUE,
+            domain=EGAMES_COOKIE_DOMAIN or None,
+            path=EGAMES_COOKIE_PATH or "/",
+            secure=EGAMES_COOKIE_SECURE
+        )
         client_kwargs["cookies"] = jar
-        # When cookie auth is used, rely solely on cookie and remove Authorization header
-        headers = client_kwargs["headers"]
-        headers.pop("Authorization", None)
-        client_kwargs["headers"] = headers
+        logger.debug("eGames cookie auth attached to requests (domain=%s, path=%s)", EGAMES_COOKIE_DOMAIN or "<auto>", EGAMES_COOKIE_PATH or "/")
 
     return client_kwargs
 
