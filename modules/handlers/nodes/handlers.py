@@ -9,19 +9,30 @@ from modules.api.config_profiles import ConfigProfileAPI
 from modules.utils.formatters import format_node_details, format_bytes
 from modules.utils.selection_helpers import SelectionHelper
 from modules.handlers.core.start import show_main_menu
+from modules.utils.auth import is_admin_user, check_admin, INSUFFICIENT_PERMISSIONS_MESSAGE
 
 logger = logging.getLogger(__name__)
 
 async def show_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show nodes menu"""
-    keyboard = [
-        [InlineKeyboardButton("📋 Список всех серверов", callback_data="list_nodes")],
-        [InlineKeyboardButton("➕ Добавить новый сервер", callback_data="add_node")],
-        [InlineKeyboardButton("📜 Получить сертификат панели", callback_data="get_panel_certificate")],
-        [InlineKeyboardButton("🔄 Перезапустить все серверы", callback_data="restart_all_nodes")],
-        [InlineKeyboardButton("📊 Статистика использования", callback_data="nodes_usage")],
-        [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
-    ]
+    user = update.effective_user or (update.callback_query.from_user if update.callback_query else None)
+    is_admin = context.user_data.get('is_admin')
+    if is_admin is None and user is not None:
+        is_admin = is_admin_user(user.id)
+        context.user_data['is_admin'] = is_admin
+
+    keyboard = [[InlineKeyboardButton("📋 Список всех серверов", callback_data="list_nodes")]]
+
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("➕ Добавить новый сервер", callback_data="add_node")])
+
+    keyboard.append([InlineKeyboardButton("📜 Получить сертификат панели", callback_data="get_panel_certificate")])
+
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("🔄 Перезапустить все серверы", callback_data="restart_all_nodes")])
+
+    keyboard.append([InlineKeyboardButton("📊 Статистика использования", callback_data="nodes_usage")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     message = "🖥️ *Управление серверами*\n\n"
@@ -39,6 +50,17 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
+
+    is_admin = context.user_data.get('is_admin')
+    if is_admin is None:
+        is_admin = is_admin_user(update.effective_user.id)
+        context.user_data['is_admin'] = is_admin
+
+    admin_only_actions = {"add_node", "restart_all_nodes", "confirm_restart_all"}
+    admin_only_prefixes = ("enable_node_", "disable_node_", "restart_node_", "edit_node_")
+    if not is_admin and (data in admin_only_actions or data.startswith(admin_only_prefixes)):
+        await query.answer(INSUFFICIENT_PERMISSIONS_MESSAGE, show_alert=True)
+        return NODE_MENU
 
     if data == "list_nodes":
         await list_nodes(update, context)
@@ -294,6 +316,7 @@ async def show_nodes_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return NODE_MENU
 
+@check_admin
 async def enable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Enable node"""
     logger.info(f"Attempting to enable node with UUID: {uuid}")
@@ -335,6 +358,7 @@ async def enable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     
     return NODE_MENU
 
+@check_admin
 async def disable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Disable node"""
     logger.info(f"Attempting to disable node with UUID: {uuid}")
@@ -376,6 +400,7 @@ async def disable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid)
     
     return NODE_MENU
 
+@check_admin
 async def restart_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Restart node"""
     result = await NodeAPI.restart_node(uuid)
@@ -731,6 +756,7 @@ async def start_edit_node_field(update: Update, context: ContextTypes.DEFAULT_TY
         await update.callback_query.edit_message_text("❌ Ошибка при подготовке редактирования.")
         return EDIT_NODE
 
+@check_admin
 async def handle_node_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle input for node field editing"""
     try:
@@ -895,6 +921,7 @@ async def handle_cancel_node_edit(update: Update, context: ContextTypes.DEFAULT_
 # NODE CREATION FUNCTIONS
 # =============================================================================
 
+@check_admin
 async def start_create_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start creating a new node"""
     query = update.callback_query
@@ -933,6 +960,7 @@ async def start_create_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return CREATE_NODE
 
+@check_admin
 async def handle_node_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle node creation steps"""
     try:

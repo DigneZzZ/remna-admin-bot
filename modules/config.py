@@ -71,6 +71,38 @@ if admin_ids_str:
 else:
     logger.warning("ADMIN_USER_IDS is empty or not set!")
 
+operator_ids_str = os.getenv("OPERATOR_USER_IDS", "")
+logger.info(f"Raw OPERATOR_USER_IDS from env: '{operator_ids_str}'")
+
+OPERATOR_USER_IDS = []
+if operator_ids_str:
+    try:
+        OPERATOR_USER_IDS = [int(id.strip()) for id in operator_ids_str.split(",") if id.strip()]
+        logger.info(f"Parsed OPERATOR_USER_IDS: {OPERATOR_USER_IDS}")
+    except ValueError as e:
+        logger.error(f"Error parsing OPERATOR_USER_IDS: {e}")
+        OPERATOR_USER_IDS = []
+else:
+    logger.info("OPERATOR_USER_IDS is empty or not set")
+
+def _build_user_roles(admin_ids, operator_ids):
+    roles = {}
+    for admin_id in admin_ids:
+        roles[admin_id] = "admin"
+    for operator_id in operator_ids:
+        if operator_id in roles:
+            continue
+        roles[operator_id] = "operator"
+    return roles
+
+USER_ROLES = _build_user_roles(ADMIN_USER_IDS, OPERATOR_USER_IDS)
+AUTHORIZED_USER_IDS = list(USER_ROLES.keys())
+
+if USER_ROLES:
+    logger.info(f"Configured user roles: {USER_ROLES}")
+else:
+    logger.warning("No user roles configured. Bot will deny all requests.")
+
 # Conversation states
 MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU = range(6)
 SELECTING_USER, WAITING_FOR_INPUT, CONFIRM_ACTION = range(6, 9)

@@ -5,7 +5,11 @@ from modules.config import (
     DASHBOARD_SHOW_USERS_COUNT, DASHBOARD_SHOW_NODES_COUNT, 
     DASHBOARD_SHOW_TRAFFIC_STATS, DASHBOARD_SHOW_UPTIME
 )
-from modules.utils.auth import check_admin
+from modules.utils.auth import (
+    check_operator_or_admin,
+    get_user_role,
+    is_admin_user
+)
 from modules.api.users import UserAPI
 from modules.api.nodes import NodeAPI
 from modules.api.inbounds import InboundAPI
@@ -14,7 +18,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-@check_admin
+ROLE_DISPLAY = {"admin": "Администратор", "operator": "Оператор"}
+
+@check_operator_or_admin
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler"""
     await show_main_menu(update, context)
@@ -22,15 +28,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show main menu with system statistics"""
+    user = update.effective_user or (update.callback_query.from_user if update.callback_query else None)
+    role = get_user_role(user.id) if user else None
+    context.user_data['role'] = role
+    is_admin = is_admin_user(user.id) if user else False
+
     keyboard = [
         [InlineKeyboardButton("👥 Управление пользователями", callback_data="users")],
         [InlineKeyboardButton("🖥️ Управление серверами", callback_data="nodes")],
         [InlineKeyboardButton("📊 Статистика системы", callback_data="stats")],
         [InlineKeyboardButton("🌐 Управление хостами", callback_data="hosts")],
-        [InlineKeyboardButton("🔌 Управление Inbounds", callback_data="inbounds")],
-        [InlineKeyboardButton("🔄 Массовые операции", callback_data="bulk")],
-        [InlineKeyboardButton("➕ Создать пользователя", callback_data="create_user")]
+        [InlineKeyboardButton("🔌 Управление Inbounds", callback_data="inbounds")]
     ]
+
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("🔄 Массовые операции", callback_data="bulk")])
+        keyboard.append([InlineKeyboardButton("➕ Создать пользователя", callback_data="create_user")])
+
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Получаем статистику системы

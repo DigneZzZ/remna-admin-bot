@@ -101,7 +101,13 @@ class Messages:
 from modules.api.users import UserAPI
 from modules.utils.formatters import format_bytes, format_user_details, format_user_details_safe, escape_markdown, safe_edit_message
 from modules.utils.selection_helpers import SelectionHelper
-from modules.utils.auth import check_admin, check_authorization
+from modules.utils.auth import (
+    check_admin,
+    check_authorization,
+    get_user_role,
+    is_admin_user,
+    INSUFFICIENT_PERMISSIONS_MESSAGE
+)
 from modules.handlers.core.start import show_main_menu
 
 logger = logging.getLogger(__name__)
@@ -116,6 +122,11 @@ def require_authorization(func):
             else:
                 await update.message.reply_text(Messages.NOT_AUTHORIZED)
             return ConversationHandler.END
+
+        user_id = update.effective_user.id
+        context.user_data['role'] = get_user_role(user_id)
+        context.user_data['is_admin'] = is_admin_user(user_id)
+
         return await func(update, context, *args, **kwargs)
     return wrapper
 
@@ -358,14 +369,16 @@ class KeyboardBuilder:
     """Класс для создания клавиатур"""
     
     @staticmethod
-    def create_main_menu():
+    def create_main_menu(is_admin: bool):
         """Создает главное меню пользователей"""
-        return InlineKeyboardMarkup([
+        rows = [
             [InlineKeyboardButton("📋 Список всех пользователей", callback_data=CallbackData.LIST_USERS)],
-            [InlineKeyboardButton("🔍 Поиск пользователя", callback_data=CallbackData.SEARCH_USER)],
-            [InlineKeyboardButton("➕ Создать пользователя", callback_data=CallbackData.CREATE_USER)],
-            [InlineKeyboardButton("🔙 Назад в главное меню", callback_data=CallbackData.BACK_TO_MAIN)]
-        ])
+            [InlineKeyboardButton("🔍 Поиск пользователя", callback_data=CallbackData.SEARCH_USER)]
+        ]
+        if is_admin:
+            rows.append([InlineKeyboardButton("➕ Создать пользователя", callback_data=CallbackData.CREATE_USER)])
+        rows.append([InlineKeyboardButton("🔙 Назад в главное меню", callback_data=CallbackData.BACK_TO_MAIN)])
+        return InlineKeyboardMarkup(rows)
     
     @staticmethod
     def create_back_button(callback_data: str = CallbackData.BACK_TO_USERS):
@@ -632,7 +645,7 @@ class DataValidators:
 @log_user_action("show_users_menu")
 async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show users menu"""
-    reply_markup = KeyboardBuilder.create_main_menu()
+    reply_markup = KeyboardBuilder.create_main_menu(context.user_data.get('is_admin', False))
 
     message = (
         "👥 *Управление пользователями*\n\n"
@@ -655,6 +668,9 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
+
+    is_admin = context.user_data.get('is_admin', False)
+
     try:
         logger.debug(f"handle_user_selection received callback data: {data}")
     except Exception:
@@ -983,7 +999,7 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         logger.error(f"Error formatting user details (safe): {e}")
         message = f"👤 Пользователь: {user.get('username','')}\n🆔 UUID: {user.get('uuid','')}\n📊 Статус: {user.get('status','')}"
 
-    keyboard = SelectionHelper.create_user_info_keyboard(uuid, action_prefix="user_action")
+    keyboard = SelectionHelper.create_user_info_keyboard(uuid, action_prefix="user_action", is_admin=context.user_data.get('is_admin', False))
 
     try:
         await update.callback_query.edit_message_text(
@@ -1021,6 +1037,11 @@ async def handle_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
         action_parts = data.split("_")
         if len(action_parts) >= 4:
             action = action_parts[2]
+            admin_only_actions = {"edit", "disable", "enable", "reset", "revoke", "delete", "hwid"}
+            if not is_admin and action in admin_only_actions:
+                await query.answer(INSUFFICIENT_PERMISSIONS_MESSAGE, show_alert=True)
+                return SELECTING_USER
+
             uuid = "_".join(action_parts[3:])  # Handle UUIDs with underscores
             
             if action == "edit":
@@ -1104,6 +1125,11 @@ async def handle_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 # Confirm user deletion with extra protection
                 await confirm_delete_user(update, context, uuid)
                 return CONFIRM_ACTION
+
+    admin_only_prefixes = ("disable_", "enable_", "reset_", "revoke_", "delete_", "edit_", "add_hwid_", "del_hwid_", "confirm_del_hwid_")
+    if not is_admin and data.startswith(admin_only_prefixes):
+        await query.answer(INSUFFICIENT_PERMISSIONS_MESSAGE, show_alert=True)
+        return SELECTING_USER
 
     # Legacy support for back navigation
     if data == "back_to_list":
@@ -1214,6 +1240,7 @@ async def handle_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     return SELECTING_USER
 
+@check_admin
 async def handle_action_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle action confirmation"""
     query = update.callback_query
@@ -1535,6 +1562,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return EDIT_USER
 
+@check_admin
 async def start_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start creating a new user - first show template selection"""
     # Clear any previous user creation data
@@ -1977,6 +2005,7 @@ async def ask_for_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return CREATE_USER_FIELD
 
+@check_admin
 async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user input when creating a user"""
     query = update.callback_query
@@ -2937,6 +2966,7 @@ async def start_edit_user(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
     
     return EDIT_USER
 
+@check_admin
 async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle edit field selection"""
     query = update.callback_query
@@ -2995,6 +3025,7 @@ async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFA
     
     return EDIT_USER
 
+@check_admin
 async def handle_edit_field_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle edit field value input"""
     if not update.message:
@@ -3116,6 +3147,7 @@ async def handle_edit_field_value(update: Update, context: ContextTypes.DEFAULT_
     
     return EDIT_USER
 
+@check_admin
 async def handle_cancel_user_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle cancel user creation"""
     query = update.callback_query
