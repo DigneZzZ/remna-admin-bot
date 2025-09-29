@@ -43,8 +43,19 @@ def _load_language_map(language: str) -> Dict[str, Any]:
         return {"map": {}, "keys": ()}
 
     data = json.loads(locale_file.read_text(encoding="utf-8"))
-    keys = tuple(sorted(data.keys(), key=len, reverse=True))
-    return {"map": data, "keys": keys}
+
+    sanitized_map: Dict[str, str] = {}
+    for raw_key, raw_value in data.items():
+        key = str(raw_key) if not isinstance(raw_key, str) else raw_key
+        if not key:
+            continue
+        if raw_value is None:
+            continue
+        value = raw_value if isinstance(raw_value, str) else str(raw_value)
+        sanitized_map[key] = value
+
+    keys = tuple(sorted(sanitized_map.keys(), key=len, reverse=True))
+    return {"map": sanitized_map, "keys": keys}
 
 
 def translate_text(text: Optional[str], language: Optional[str] = None) -> Optional[str]:
@@ -55,10 +66,13 @@ def translate_text(text: Optional[str], language: Optional[str] = None) -> Optio
         return text
 
     lang_data = _load_language_map(language)
-    result = text
+    result = str(text)
     for key in lang_data["keys"]:
         if key and key in result:
-            result = result.replace(key, lang_data["map"][key])
+            replacement = lang_data["map"].get(key)
+            if not isinstance(replacement, str):
+                continue
+            result = result.replace(key, replacement)
     return result
 
 
