@@ -1,4 +1,4 @@
-﻿import os
+import os
 import logging
 import sys
 from dotenv import load_dotenv
@@ -85,6 +85,7 @@ from telegram.ext import Application, MessageHandler, CallbackQueryHandler, filt
 
 # Import modules
 from modules.handlers.core.conversation import create_conversation_handler
+from modules import localization  # noqa: F401 - ensure localization patches are loaded
 
 
 def main():
@@ -181,4 +182,5 @@ if __name__ == '__main__':
         pass  # Graceful shutdown
     except Exception as e:
         logger.error(f"Critical error in main: {e}", exc_info=True)
+
 

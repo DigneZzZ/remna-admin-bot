@@ -13,6 +13,8 @@ from modules.utils.auth import (
 from modules.api.users import UserAPI
 from modules.api.nodes import NodeAPI
 from modules.api.inbounds import InboundAPI
+from modules.handlers.core.language import LANGUAGE_MENU_CALLBACK
+from modules.localization import SUPPORTED_LANGUAGES, get_user_language
 from modules.utils.formatters import format_bytes
 import logging
 
@@ -32,13 +34,16 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     role = get_user_role(user.id) if user else None
     context.user_data['role'] = role
     is_admin = is_admin_user(user.id) if user else False
+    current_language = get_user_language(context)
+    language_label = SUPPORTED_LANGUAGES.get(current_language, SUPPORTED_LANGUAGES.get('ru', 'Русский'))
 
     keyboard = [
         [InlineKeyboardButton("👥 Управление пользователями", callback_data="users")],
         [InlineKeyboardButton("🖥️ Управление серверами", callback_data="nodes")],
         [InlineKeyboardButton("📊 Статистика системы", callback_data="stats")],
         [InlineKeyboardButton("🌐 Управление хостами", callback_data="hosts")],
-        [InlineKeyboardButton("🔌 Управление Inbounds", callback_data="inbounds")]
+        [InlineKeyboardButton("🔌 Управление Inbounds", callback_data="inbounds")],
+        [InlineKeyboardButton("🌐 Язык бота", callback_data=LANGUAGE_MENU_CALLBACK)]
     ]
 
     if is_admin:
@@ -52,6 +57,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = "🎛️ *Главное меню Remnawave Admin*\n\n"
     message += stats_text + "\n"
+    message += f"🌐 Текущий язык: {language_label}\n\n"
     message += "Выберите раздел для управления:"
 
     if update.callback_query:
@@ -374,4 +380,5 @@ async def get_basic_system_stats():
     except Exception as e:
         logger.error(f"Error getting basic system stats: {e}")
         return "📈 *Статистика временно недоступна*\n"
+
 

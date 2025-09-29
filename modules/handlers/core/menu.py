@@ -13,6 +13,12 @@ from modules.handlers.hosts import show_hosts_menu
 from modules.handlers.inbounds import show_inbounds_menu, handle_inbounds_menu
 from modules.handlers.bulk import show_bulk_menu
 from modules.handlers.core.start import show_main_menu
+from modules.handlers.core.language import (
+    LANGUAGE_MENU_CALLBACK,
+    LANGUAGE_SELECT_PREFIX,
+    handle_language_selection,
+    show_language_menu,
+)
 
 async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu selection"""
@@ -60,6 +66,10 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
         await show_inbounds_menu(update, context)
         return INBOUND_MENU
 
+    elif data == LANGUAGE_MENU_CALLBACK:
+        await show_language_menu(update, context)
+        return MAIN_MENU
+
     # Handle inbound menu callbacks (temporary fix)
     elif data in ["list_inbounds", "list_full_inbounds", "list_inbounds_stats", "filter_inbounds", "refresh_inbounds", "debug_users"]:
         logger.info(f"Redirecting inbound callback to handle_inbounds_menu: {data}")
@@ -82,6 +92,9 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
         await show_user_details(update, context, uuid)
         return SELECTING_USER
 
+    elif data.startswith(LANGUAGE_SELECT_PREFIX):
+        return await handle_language_selection(update, context)
+
     return MAIN_MENU
 
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,5 +107,6 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Показываем главное меню со статистикой
     await show_main_menu(update, context)
     return MAIN_MENU
+
 
 
