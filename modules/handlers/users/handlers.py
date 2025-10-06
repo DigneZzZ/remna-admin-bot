@@ -645,27 +645,6 @@ class DataValidators:
 @log_user_action("show_users_menu")
 async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show users menu"""
-    # English layout (early return) to improve readability
-    try:
-        is_admin = context.user_data.get('is_admin', False)
-        keyboard_rows = [
-            [InlineKeyboardButton("📋 List Users", callback_data=CallbackData.LIST_USERS)],
-            [InlineKeyboardButton("🔎 Search User", callback_data=CallbackData.SEARCH_USER)],
-        ]
-        if is_admin:
-            keyboard_rows.append([InlineKeyboardButton("➕ Create User", callback_data=CallbackData.CREATE_USER)])
-        keyboard_rows.append([InlineKeyboardButton("⬅️ Back to Main", callback_data=CallbackData.BACK_TO_MAIN)])
-        reply_markup = InlineKeyboardMarkup(keyboard_rows)
-        message = (
-            "👥 Users Menu\n\n"
-            "• List users\n"
-            "• Search by name, Telegram ID, UUID, short UUID, email, or tag\n\n"
-            "Choose an option below:"
-        )
-        await safe_edit_message(update.callback_query, message, reply_markup, None)
-        return
-    except Exception:
-        pass
     reply_markup = KeyboardBuilder.create_main_menu(context.user_data.get('is_admin', False))
 
     message = (
@@ -690,31 +669,11 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
     is_admin = context.user_data.get('is_admin', False)
-    # Get admin flag from context for permission checks
-    is_admin = context.user_data.get('is_admin', False)
-
-    is_admin = context.user_data.get('is_admin', False)
 
     try:
         logger.debug(f"handle_user_selection received callback data: {data}")
     except Exception:
         pass
-
-    # English prompt for search (clean layout)
-    if data == CallbackData.SEARCH_USER:
-        back_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data=CallbackData.BACK_TO_USERS)]])
-        search_prompt = (
-            "🔎 Enter a search query:\n\n"
-            "For example: name, email, tag, UUID or Telegram ID."
-        )
-        await safe_edit_message(
-            query,
-            search_prompt,
-            back_markup,
-            None
-        )
-        context.user_data["search_type"] = "generic"
-        return WAITING_FOR_INPUT
 
     if data == CallbackData.LIST_USERS:
         await list_users(update, context)
