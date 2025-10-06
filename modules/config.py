@@ -118,7 +118,7 @@ CREATE_NODE, NODE_NAME, NODE_ADDRESS, NODE_PORT, NODE_TLS, SELECT_INBOUNDS = ran
 # User creation fields
 USER_FIELDS = {
     'username': 'Имя пользователя',
-    'trafficLimitBytes': 'Лимит трафика (в байтах)',
+    'trafficLimitBytes': 'Лимит трафика (в гигабайтах; 0 — безлимит)',
     'trafficLimitStrategy': 'Стратегия сброса трафика (NO_RESET, DAY, WEEK, MONTH)',
     'expireAt': 'Дата истечения (YYYY-MM-DD)',
     'description': 'Описание',

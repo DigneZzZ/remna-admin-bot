@@ -3004,6 +3004,65 @@ async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFA
             [InlineKeyboardButton("🔙 Назад к выбору поля", callback_data=f"edit_{user['uuid']}")],
             [InlineKeyboardButton("❌ Отмена", callback_data=f"view_{user['uuid']}")]
         ]
+        # Add preset inline buttons for specific fields
+        preset_keyboard = []
+        if field == "expireAt":
+            message += "\nВы можете ввести дату в формате `YYYY-MM-DD` для установки точной даты,\n"
+            message += "или нажать на кнопку, чтобы добавить дни к текущему сроку:\n"
+            preset_keyboard.extend([
+                [
+                    InlineKeyboardButton("➕ 30 дн.", callback_data="edit_expire_plus_30"),
+                    InlineKeyboardButton("➕ 60 дн.", callback_data="edit_expire_plus_60"),
+                    InlineKeyboardButton("➕ 90 дн.", callback_data="edit_expire_plus_90"),
+                ],
+                [
+                    InlineKeyboardButton("➕ 180 дн.", callback_data="edit_expire_plus_180"),
+                    InlineKeyboardButton("➕ 360 дн.", callback_data="edit_expire_plus_360"),
+                ],
+            ])
+        elif field == "trafficLimitBytes":
+            message += "\nВведите лимит в ГБ (целое число). `0` — безлимит.\nИли выберите готовое значение ниже:"
+            preset_keyboard.extend([
+                [
+                    InlineKeyboardButton("0 (безлимит)", callback_data="edit_traffic_gb_0"),
+                    InlineKeyboardButton("10 ГБ", callback_data="edit_traffic_gb_10"),
+                    InlineKeyboardButton("50 ГБ", callback_data="edit_traffic_gb_50"),
+                ],
+                [
+                    InlineKeyboardButton("100 ГБ", callback_data="edit_traffic_gb_100"),
+                    InlineKeyboardButton("300 ГБ", callback_data="edit_traffic_gb_300"),
+                    InlineKeyboardButton("500 ГБ", callback_data="edit_traffic_gb_500"),
+                ],
+            ])
+        elif field == "trafficLimitStrategy":
+            message += "\nВыберите стратегию сброса: `NO_RESET` (без сброса), `DAY`, `WEEK`, `MONTH`."
+            preset_keyboard.extend([
+                [
+                    InlineKeyboardButton("NO_RESET", callback_data="edit_strategy_NO_RESET"),
+                    InlineKeyboardButton("DAY", callback_data="edit_strategy_DAY"),
+                ],
+                [
+                    InlineKeyboardButton("WEEK", callback_data="edit_strategy_WEEK"),
+                    InlineKeyboardButton("MONTH", callback_data="edit_strategy_MONTH"),
+                ],
+            ])
+        elif field == "hwidDeviceLimit":
+            message += "\nВведите лимит устройств (целое число). `0` — без ограничений.\nИли выберите готовое значение ниже:"
+            preset_keyboard.extend([
+                [
+                    InlineKeyboardButton("0", callback_data="edit_devices_0"),
+                    InlineKeyboardButton("1", callback_data="edit_devices_1"),
+                    InlineKeyboardButton("2", callback_data="edit_devices_2"),
+                ],
+                [
+                    InlineKeyboardButton("3", callback_data="edit_devices_3"),
+                    InlineKeyboardButton("5", callback_data="edit_devices_5"),
+                    InlineKeyboardButton("10", callback_data="edit_devices_10"),
+                ],
+            ])
+
+        if preset_keyboard:
+            keyboard = preset_keyboard + keyboard
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
@@ -3041,6 +3100,133 @@ async def handle_edit_field_value(update: Update, context: ContextTypes.DEFAULT_
         query = update.callback_query
         await query.answer()
         data = query.data
+        user = context.user_data.get("edit_user")
+
+        # Preset handlers for inline buttons while editing a value
+        if user is not None:
+            if data.startswith("edit_expire_plus_"):
+                try:
+                    days = int(data.split("_")[-1])
+                except Exception:
+                    return EDIT_VALUE
+
+                # Base on current expireAt if valid, otherwise today
+                base_date = None
+                try:
+                    if user.get("expireAt"):
+                        base_date = datetime.fromisoformat(user['expireAt'].replace('Z', '+00:00'))
+                except Exception:
+                    base_date = None
+                if base_date is None:
+                    base_date = datetime.now().astimezone()
+
+                new_date = (base_date + timedelta(days=days)).strftime("%Y-%m-%dT00:00:00.000Z")
+                update_data = {"expireAt": new_date}
+
+                result = await UserAPI.update_user(user["uuid"], update_data)
+                if result:
+                    context.user_data["edit_user"]["expireAt"] = new_date
+                    keyboard = [
+                        [InlineKeyboardButton("👤 К пользователю", callback_data=f"view_{user['uuid']}")],
+                        [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_{user['uuid']}")],
+                        [InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_list")],
+                    ]
+                    await query.edit_message_text(
+                        text=f"✅ Дата истечения обновлена: {new_date[:10]}",
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    return EDIT_USER
+                else:
+                    await query.edit_message_text(
+                        text="❌ Не удалось обновить дату истечения.",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]])
+                    )
+                    return EDIT_VALUE
+
+            elif data.startswith("edit_traffic_gb_"):
+                try:
+                    gb = int(data.split("_")[-1])
+                    bytes_value = 0 if gb == 0 else gb * 1024 * 1024 * 1024
+                except Exception:
+                    return EDIT_VALUE
+                update_data = {"trafficLimitBytes": bytes_value}
+                result = await UserAPI.update_user(user["uuid"], update_data)
+                if result:
+                    context.user_data["edit_user"]["trafficLimitBytes"] = bytes_value
+                    shown = "Безлимитный" if bytes_value == 0 else f"{gb} ГБ"
+                    keyboard = [
+                        [InlineKeyboardButton("👤 К пользователю", callback_data=f"view_{user['uuid']}")],
+                        [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_{user['uuid']}")],
+                        [InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_list")],
+                    ]
+                    await query.edit_message_text(
+                        text=f"✅ Лимит трафика обновлён: {shown}",
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    return EDIT_USER
+                else:
+                    await query.edit_message_text(
+                        text="❌ Не удалось обновить лимит трафика.",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]])
+                    )
+                    return EDIT_VALUE
+
+            elif data.startswith("edit_strategy_"):
+                strategy = data.split("_", 2)[2]
+                if strategy not in ("NO_RESET", "DAY", "WEEK", "MONTH"):
+                    return EDIT_VALUE
+                update_data = {"trafficLimitStrategy": strategy}
+                result = await UserAPI.update_user(user["uuid"], update_data)
+                if result:
+                    context.user_data["edit_user"]["trafficLimitStrategy"] = strategy
+                    keyboard = [
+                        [InlineKeyboardButton("👤 К пользователю", callback_data=f"view_{user['uuid']}")],
+                        [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_{user['uuid']}")],
+                        [InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_list")],
+                    ]
+                    await query.edit_message_text(
+                        text=f"✅ Стратегия сброса трафика обновлена: {strategy}",
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    return EDIT_USER
+                else:
+                    await query.edit_message_text(
+                        text="❌ Не удалось обновить стратегию сброса трафика.",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]])
+                    )
+                    return EDIT_VALUE
+
+            elif data.startswith("edit_devices_"):
+                try:
+                    devices = int(data.split("_")[-1])
+                except Exception:
+                    return EDIT_VALUE
+                if devices < 0:
+                    return EDIT_VALUE
+                update_data = {"hwidDeviceLimit": devices}
+                if devices > 0:
+                    update_data["trafficLimitStrategy"] = "NO_RESET"
+                result = await UserAPI.update_user(user["uuid"], update_data)
+                if result:
+                    context.user_data["edit_user"].update(update_data)
+                    shown = "Без ограничений" if devices == 0 else str(devices)
+                    keyboard = [
+                        [InlineKeyboardButton("👤 К пользователю", callback_data=f"view_{user['uuid']}")],
+                        [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_{user['uuid']}")],
+                        [InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_list")],
+                    ]
+                    await query.edit_message_text(
+                        text=f"✅ Лимит устройств обновлён: {shown}",
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    return EDIT_USER
+                else:
+                    await query.edit_message_text(
+                        text="❌ Не удалось обновить лимит устройств.",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]])
+                    )
+                    return EDIT_VALUE
+
         if data.startswith("edit_"):
             try:
                 uuid = data.split("_", 1)[1]
@@ -3086,9 +3272,11 @@ async def handle_edit_field_value(update: Update, context: ContextTypes.DEFAULT_
     
     elif field == "trafficLimitBytes":
         try:
-            value = int(value)
-            if value < 0:
+            gb = int(value)
+            if gb < 0:
                 raise ValueError("Traffic limit cannot be negative")
+            # Convert GB to bytes (0 stays unlimited)
+            value = 0 if gb == 0 else gb * 1024 * 1024 * 1024
         except ValueError:
             keyboard = [
                 [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
@@ -3096,7 +3284,7 @@ async def handle_edit_field_value(update: Update, context: ContextTypes.DEFAULT_
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await update.message.reply_text(
-                "❌ Неверный формат числа. Введите целое число >= 0.",
+                "❌ Неверный формат. Введите целое число ГБ (0 — безлимит).",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
