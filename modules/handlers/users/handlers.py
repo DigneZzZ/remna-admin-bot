@@ -689,6 +689,9 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
+    is_admin = context.user_data.get('is_admin', False)
+    # Get admin flag from context for permission checks
+    is_admin = context.user_data.get('is_admin', False)
 
     is_admin = context.user_data.get('is_admin', False)
 
@@ -1068,6 +1071,7 @@ async def handle_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
 
     data = query.data
+    is_admin = context.user_data.get('is_admin', False)
 
     # Handle new SelectionHelper callback patterns
     if data.startswith("user_action_"):
@@ -3009,6 +3013,7 @@ async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFA
     await query.answer()
     
     data = query.data
+    is_admin = context.user_data.get('is_admin', False)
 
     if data.startswith("edit_field_"):
         field = data[11:]  # убираем "edit_field_"
