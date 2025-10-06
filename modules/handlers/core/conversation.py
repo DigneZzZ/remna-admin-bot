@@ -101,7 +101,9 @@ def create_conversation_handler():
                 CallbackQueryHandler(handle_bulk_menu)
             ],
             SELECTING_USER: [
+                # Handle both new and legacy user action patterns
                 CallbackQueryHandler(handle_user_action, pattern="^user_action_"),
+                CallbackQueryHandler(handle_user_action, pattern="^(edit_|disable_|enable_|reset_|revoke_|delete_|hwid_|stats_|confirm_del_hwid_)"),
                 CallbackQueryHandler(handle_user_selection)
             ],
             WAITING_FOR_INPUT: [
