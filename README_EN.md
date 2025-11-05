@@ -9,8 +9,7 @@ Telegram bot for administering Remnawave: manage users, nodes, inbounds, and sta
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
 
 Contact points:
-- [openode.xyz](https://openode.xyz)
-- [neonode.cc](https://neonode.cc)
+- [GIG.ovh](https://gig.ovh)
 - [GitHub – Case211](https://github.com/Case211)
 - [Telegram](https://t.me/remnawave_admin)
 
@@ -43,8 +42,8 @@ Reference for eGames: [`wiki.egam.es`](https://wiki.egam.es/)
 ```bash
 sudo mkdir -p /opt/remna-bot
 cd /opt/remna-bot
-curl -o .env https://raw.githubusercontent.com/Case211/remna-ad/main/.env.example
-curl -o docker-compose.yml https://raw.githubusercontent.com/Case211/remna-ad/main/docker-compose-prod.yml
+curl -o .env https://raw.githubusercontent.com/DigneZzZ/remna-admin-bot/main/.env.example
+curl -o docker-compose.yml https://raw.githubusercontent.com/DigneZzZ/remna-admin-bot/main/docker-compose-prod.yml
 ```
 2. Configure environment variables:
 ```bash
@@ -61,8 +60,8 @@ docker compose logs -f
 
 ### Manual Run
 ```bash
-git clone https://github.com/Case211/remna-ad.git
-cd remna-ad
+git clone https://github.com/DigneZzZ/remna-admin-bot.git
+cd remna-admin-bot
 pip install -r requirements.txt
 cp .env.example .env
 nano .env
