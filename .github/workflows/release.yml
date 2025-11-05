@@ -43,7 +43,7 @@ jobs:
       - name: Check if Docker image exists
         id: docker_check
         run: |
-          IMAGE="ghcr.io/case211/remna-ad:${{ steps.version.outputs.version }}"
+          IMAGE="ghcr.io/dignezzz/remna-admin-bot:${{ steps.version.outputs.version }}"
           if docker manifest inspect $IMAGE > /dev/null 2>&1; then
             echo "docker_exists=true" >> $GITHUB_OUTPUT
             echo "docker_image=$IMAGE" >> $GITHUB_OUTPUT
@@ -105,7 +105,7 @@ jobs:
       - name: Update latest release info
         run: |
           echo "✅ Release ${{ steps.version.outputs.version }} created successfully!"
-          echo "🐳 Docker Image: ghcr.io/case211/remna-ad:${{ steps.version.outputs.version }}"
+          echo "🐳 Docker Image: ghcr.io/dignezzz/remna-admin-bot:${{ steps.version.outputs.version }}"
           echo "📦 Release Assets: docker-compose-prod.yml, .env.production, deploy scripts"
           if [ "${{ steps.docker_check.outputs.docker_exists }}" = "true" ]; then
             echo "✅ Docker image is available"
