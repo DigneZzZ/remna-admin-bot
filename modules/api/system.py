@@ -17,13 +17,14 @@ class SystemAPI:
     async def get_nodes_statistics():
         """Get nodes statistics"""
         return await RemnaAPI.get("system/stats/nodes")
+
     
     @staticmethod
     async def get_xray_config():
-        """Get XRay configuration"""
-        return await RemnaAPI.get("xray")
+        """Not available in v208"""
+        return None
     
     @staticmethod
     async def update_xray_config(config_data):
-        """Update XRay configuration"""
-        return await RemnaAPI.patch("xray", config_data)
+        """Not available in v208"""
+        return None

@@ -6,7 +6,7 @@ from modules.config import MAIN_MENU, BULK_MENU, BULK_ACTION, BULK_CONFIRM
 from modules.api.bulk import BulkAPI
 from modules.api.users import UserAPI
 from modules.utils.selection_helpers import SelectionHelper
-from modules.handlers.start_handler import show_main_menu
+from modules.handlers.core.start import show_main_menu
 
 logger = logging.getLogger(__name__)
 
@@ -180,3 +180,5 @@ async def handle_bulk_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE
         return BULK_MENU
 
     return BULK_MENU
+
+

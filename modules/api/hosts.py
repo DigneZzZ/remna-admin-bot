@@ -20,8 +20,18 @@ class HostAPI:
     
     @staticmethod
     async def update_host(uuid, data):
-        """Update a host"""
+        """Update a host (v208 UpdateHostRequestDto)"""
         data["uuid"] = uuid
+        # Adjust inbound payload if user passed inboundUuid previously
+        if "inboundUuid" in data and "inbound" not in data:
+            # v208 requires inbound: { configProfileUuid, configProfileInboundUuid }
+            inbound_uuid = data.pop("inboundUuid")
+            # We cannot infer configProfileUuid here; expect caller to provide proper structure.
+            # Keep backward compat: place under inbound as configProfileInboundUuid only if provided via extra key
+            data["inbound"] = {
+                "configProfileUuid": data.pop("configProfileUuid", None),
+                "configProfileInboundUuid": inbound_uuid
+            }
         return await RemnaAPI.patch("hosts", data)
     
     @staticmethod
@@ -31,13 +41,13 @@ class HostAPI:
     
     @staticmethod
     async def enable_host(uuid):
-        """Enable a host using direct PATCH endpoint"""
+        """Enable a host using PATCH"""
         data = {"uuid": uuid, "isDisabled": False}
         return await RemnaAPI.patch("hosts", data)
     
     @staticmethod
     async def disable_host(uuid):
-        """Disable a host using direct PATCH endpoint"""
+        """Disable a host using PATCH"""
         data = {"uuid": uuid, "isDisabled": True}
         return await RemnaAPI.patch("hosts", data)
     
@@ -66,10 +76,11 @@ class HostAPI:
     
     @staticmethod
     async def bulk_set_inbound_to_hosts(uuids, inbound_uuid):
-        """Set inbound to hosts by UUIDs"""
+        """Set inbound to hosts by UUIDs (v208 requires configProfile mapping)"""
         data = {
             "uuids": uuids,
-            "inboundUuid": inbound_uuid
+            "configProfileUuid": None,
+            "configProfileInboundUuid": inbound_uuid
         }
         return await RemnaAPI.post("hosts/bulk/set-inbound", data)
     

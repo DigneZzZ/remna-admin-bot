@@ -2,10 +2,11 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import logging
 
-from modules.config import MAIN_MENU, HOST_MENU, EDIT_HOST, EDIT_HOST_FIELD
+from modules.config import MAIN_MENU, HOST_MENU, EDIT_HOST, EDIT_HOST_FIELD, HOST_PROFILE, HOST_INBOUND, HOST_PARAMS
+from modules.api.config_profiles import ConfigProfileAPI
 from modules.api.hosts import HostAPI
 from modules.utils.formatters import format_host_details
-from modules.handlers.start_handler import show_main_menu
+from modules.handlers.core.start import show_main_menu
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +39,21 @@ async def handle_hosts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await list_hosts(update, context)
 
     elif data == "create_host":
-        # TODO: Implement create host functionality
-        await query.edit_message_text(
-            "🚧 Функция создания хоста находится в разработке.",
-            parse_mode="Markdown"
-        )
-        return HOST_MENU
+        return await start_create_host(update, context)
+    
+    elif data.startswith("create_host_profile_"):
+        profile_uuid = data.split("_")[-1]
+        ch = context.user_data.get("create_host", {})
+        ch["configProfileUuid"] = profile_uuid
+        context.user_data["create_host"] = ch
+        return await choose_host_inbound(update, context)
+    
+    elif data.startswith("create_host_inbound_"):
+        inbound_uuid = data.split("_")[-1]
+        ch = context.user_data.get("create_host", {})
+        ch["configProfileInboundUuid"] = inbound_uuid
+        context.user_data["create_host"] = ch
+        return await input_host_params(update, context)
 
     elif data == "back_to_hosts":
         await show_hosts_menu(update, context)
@@ -74,11 +84,154 @@ async def handle_hosts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("delete_host_"):
         uuid = data.split("_")[2]
-        # TODO: Implement delete host functionality
+        # Ask confirmation
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Да, удалить", callback_data=f"confirm_delete_host_{uuid}"),
+                InlineKeyboardButton("❌ Отмена", callback_data=f"view_host_{uuid}")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "🚧 Функция удаления хоста находится в разработке.",
+            "⚠️ Вы уверены, что хотите удалить этот хост?",
+            reply_markup=reply_markup,
             parse_mode="Markdown"
         )
+        return HOST_MENU
+
+    elif data.startswith("confirm_delete_host_"):
+        uuid = data.split("_")[3]
+        try:
+            result = await HostAPI.delete_host(uuid)
+            if result:
+                message = "✅ Хост успешно удалён."
+            else:
+                message = "❌ Не удалось удалить хост."
+        except Exception:
+            message = "❌ Ошибка при удалении хоста."
+        keyboard = [[InlineKeyboardButton("🔙 К списку хостов", callback_data="list_hosts")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        return HOST_MENU
+
+    return HOST_PROFILE
+async def start_create_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start host creation wizard: choose config profile"""
+    query = update.callback_query
+    await query.answer()
+    profiles = await ConfigProfileAPI.get_profiles()
+    if not profiles:
+        await query.edit_message_text("❌ Не удалось получить список профилей.")
+        return HOST_MENU
+    keyboard = []
+    for p in profiles[:10]:
+        name = p.get("name", p.get("uuid", "Profile"))
+        keyboard.append([InlineKeyboardButton(name, callback_data=f"create_host_profile_{p.get('uuid')}")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_hosts")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.user_data["create_host"] = {}
+    await query.edit_message_text(
+        text="🆕 Создание хоста\n\nШаг 1/3: выберите профиль конфигурации:",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    return HOST_INBOUND
+
+async def choose_host_inbound(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Step 2 - choose inbound from selected profile"""
+    query = update.callback_query
+    ch = context.user_data.get("create_host", {})
+    profile_uuid = ch.get("configProfileUuid")
+    if not profile_uuid:
+        return await start_create_host(update, context)
+    inbounds = await ConfigProfileAPI.get_profile_inbounds(profile_uuid)
+    if not inbounds:
+        await query.edit_message_text("❌ В профиле нет inbound'ов.")
+        return HOST_MENU
+    keyboard = []
+    for inbound in inbounds[:10]:
+        name = f"{inbound.get('tag')} ({inbound.get('type')} :{inbound.get('port')})"
+        keyboard.append([InlineKeyboardButton(name, callback_data=f"create_host_inbound_{inbound.get('uuid')}")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="create_host")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(
+        text="🆕 Создание хоста\n\nШаг 2/3: выберите inbound из профиля:",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    return HOST_PARAMS
+
+async def input_host_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Step 3 - ask for host params (remark, address, port)"""
+    query = update.callback_query
+    await query.edit_message_text(
+        text=(
+            "🆕 Создание хоста\n\nШаг 3/3: введите параметры в одной строке через пробел:\n"
+            "remark address port\n\n"
+            "Например: MainHost example.com 443\n\n"
+            "После этого я попрошу SNI (можно пропустить)."
+        ),
+        parse_mode="Markdown"
+    )
+    context.user_data["host_create_wait_input"] = True
+    return HOST_PARAMS
+
+async def handle_host_creation_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle text input for host creation params (remark/address/port then SNI)"""
+    text = (update.message.text or "").strip()
+
+    if context.user_data.get("host_create_wait_input"):
+        parts = text.split()
+        if len(parts) < 3:
+            await update.message.reply_text("❌ Формат: remark address port. Пример: MainHost example.com 443")
+            return HOST_PARAMS
+        remark, address, port_str = parts[0], parts[1], parts[2]
+        try:
+            port = int(port_str)
+            if port < 1 or port > 65535:
+                raise ValueError()
+        except Exception:
+            await update.message.reply_text("❌ Порт должен быть числом 1-65535")
+            return HOST_PARAMS
+
+        ch = context.user_data.get("create_host", {})
+        ch.update({"remark": remark, "address": address, "port": port})
+        context.user_data["create_host"] = ch
+        context.user_data.pop("host_create_wait_input", None)
+        context.user_data["host_create_wait_sni"] = True
+        await update.message.reply_text("🔒 Введите SNI (или '-' чтобы пропустить):")
+        return HOST_PARAMS
+
+    if context.user_data.get("host_create_wait_sni"):
+        sni = None if text in ("", "-") else text
+        ch = context.user_data.get("create_host", {})
+        payload = {
+            "inbound": {
+                "configProfileUuid": ch.get("configProfileUuid"),
+                "configProfileInboundUuid": ch.get("configProfileInboundUuid")
+            },
+            "remark": ch.get("remark"),
+            "address": ch.get("address"),
+            "port": ch.get("port")
+        }
+        if sni:
+            payload["sni"] = sni
+        context.user_data.pop("host_create_wait_sni", None)
+        await update.message.reply_text("⏳ Создаю хост...")
+        result = await HostAPI.create_host(payload)
+        if result and result.get("uuid"):
+            uuid = result.get("uuid")
+            keyboard = [
+                [InlineKeyboardButton("👁️ Просмотр", callback_data=f"view_host_{uuid}")],
+                [InlineKeyboardButton("🔙 К списку", callback_data="list_hosts")]
+            ]
+            await update.message.reply_text("✅ Хост создан", reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await update.message.reply_text("❌ Не удалось создать хост")
         return HOST_MENU
 
     return HOST_MENU
@@ -106,7 +259,9 @@ async def list_hosts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         message += f"{i+1}. {status_emoji} *{host['remark']}*\n"
         message += f"   🌐 Адрес: {host['address']}:{host['port']}\n"
-        message += f"   🔌 Inbound: {host['inboundUuid'][:8]}...\n\n"
+        inbound = host.get('inbound') or {}
+        inbound_short = (inbound.get('configProfileInboundUuid') or '—')
+        message += f"   🔌 Inbound: {inbound_short[:8]}...\n\n"
 
     # Add action buttons
     keyboard = []
@@ -550,3 +705,5 @@ async def handle_cancel_host_edit(update: Update, context: ContextTypes.DEFAULT_
     else:
         await show_hosts_menu(update, context)
         return HOST_MENU
+
+

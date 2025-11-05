@@ -26,3 +26,4 @@ async def debug_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Don't handle the update, just log it
     return
+

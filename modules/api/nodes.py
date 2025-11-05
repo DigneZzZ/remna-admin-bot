@@ -34,25 +34,23 @@ class NodeAPI:
     
     @staticmethod
     async def enable_node(uuid):
-        """Enable a node using direct PATCH endpoint"""
-        data = {"uuid": uuid, "isDisabled": False}
-        return await RemnaAPI.patch("nodes", data)
+        """Enable a node (v208 actions endpoint)"""
+        return await RemnaAPI.post(f"nodes/{uuid}/actions/enable")
     
     @staticmethod
     async def disable_node(uuid):
-        """Disable a node using direct PATCH endpoint"""
-        data = {"uuid": uuid, "isDisabled": True}
-        return await RemnaAPI.patch("nodes", data)
+        """Disable a node (v208 actions endpoint)"""
+        return await RemnaAPI.post(f"nodes/{uuid}/actions/disable")
     
     @staticmethod
     async def restart_node(uuid):
         """Restart a node"""
-        return await RemnaAPI.post(f"nodes/{uuid}/restart")
+        return await RemnaAPI.post(f"nodes/{uuid}/actions/restart")
     
     @staticmethod
     async def restart_all_nodes():
         """Restart all nodes"""
-        return await RemnaAPI.post("nodes/restart")
+        return await RemnaAPI.post("nodes/actions/restart-all")
     
     @staticmethod
     async def reorder_nodes(nodes_data):
@@ -116,26 +114,19 @@ class NodeAPI:
     
     @staticmethod
     async def add_inbound_to_all_nodes(inbound_uuid):
-        """Add inbound to all nodes"""
-        data = {"inboundUuid": inbound_uuid}
-        return await RemnaAPI.post("inbounds/bulk/add-to-nodes", data)
+        """Not supported in v2113: inbounds are managed via config profiles"""
+        return None
     
     @staticmethod
     async def remove_inbound_from_all_nodes(inbound_uuid):
-        """Remove inbound from all nodes"""
-        data = {"inboundUuid": inbound_uuid}
-        return await RemnaAPI.post("inbounds/bulk/remove-from-nodes", data)
+        """Not supported in v2113: inbounds are managed via config profiles"""
+        return None
         
     @staticmethod
     async def get_node_certificate():
         """Get panel public key for node certificate"""
         return await RemnaAPI.get("keygen")
         
-    @staticmethod
-    async def add_inbound_to_node(node_uuid, inbound_uuid):
-        """Add inbound to specific node"""
-        data = {"inboundUuid": inbound_uuid}
-        return await RemnaAPI.post(f"nodes/{node_uuid}/inbounds", data)
     @staticmethod
     async def get_nodes_stats():
         """Get nodes statistics"""

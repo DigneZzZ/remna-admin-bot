@@ -16,29 +16,30 @@ from modules.config import (
     EDIT_USER, EDIT_FIELD, EDIT_VALUE,
     CREATE_USER, CREATE_USER_FIELD, BULK_CONFIRM, 
     EDIT_NODE, EDIT_NODE_FIELD, EDIT_HOST, EDIT_HOST_FIELD, NODE_PORT,
-    CREATE_NODE, NODE_NAME, NODE_ADDRESS, SELECT_INBOUNDS,
+    CREATE_NODE, NODE_NAME, NODE_ADDRESS, SELECT_INBOUNDS, CREATE_HOST, HOST_PROFILE, HOST_INBOUND, HOST_PARAMS,
     ADMIN_USER_IDS
 )
 from modules.utils.auth import check_authorization
 
-from modules.handlers.start_handler import start
-from modules.handlers.menu_handler import handle_menu_selection
-from modules.handlers.user_handlers import (
+from modules.handlers.core.start import start
+from modules.handlers.core.menu import handle_menu_selection
+from modules.handlers.users import (
     handle_users_menu, handle_user_selection, handle_user_action,
     handle_action_confirmation, handle_text_input,
     handle_edit_field_selection, handle_edit_field_value,
-    handle_create_user_input
+    handle_create_user_input, handle_cancel_user_creation
 )
-from modules.handlers.node_handlers import (
+from modules.handlers.nodes import (
     handle_nodes_menu, handle_node_edit_menu, handle_node_field_input, handle_cancel_node_edit,
     handle_node_creation, show_node_certificate
 )
-from modules.handlers.stats_handlers import handle_stats_menu
-from modules.handlers.host_handlers import (
-    handle_hosts_menu, handle_host_edit_menu, handle_host_field_input, handle_cancel_host_edit
+from modules.handlers.stats import handle_stats_menu
+from modules.handlers.hosts import (
+    handle_hosts_menu, handle_host_edit_menu, handle_host_field_input, handle_cancel_host_edit,
+    handle_host_creation_text
 )
-from modules.handlers.inbound_handlers import handle_inbounds_menu
-from modules.handlers.bulk_handlers import handle_bulk_menu, handle_bulk_confirm
+from modules.handlers.inbounds import handle_inbounds_menu
+from modules.handlers.bulk import handle_bulk_menu, handle_bulk_confirm
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,16 @@ def create_conversation_handler():
             HOST_MENU: [
                 CallbackQueryHandler(handle_hosts_menu)
             ],
+            HOST_PROFILE: [
+                CallbackQueryHandler(handle_hosts_menu)
+            ],
+            HOST_INBOUND: [
+                CallbackQueryHandler(handle_hosts_menu)
+            ],
+            HOST_PARAMS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_host_creation_text),
+                CallbackQueryHandler(handle_hosts_menu)
+            ],
             INBOUND_MENU: [
                 CallbackQueryHandler(handle_inbounds_menu)
             ],
@@ -90,11 +101,14 @@ def create_conversation_handler():
                 CallbackQueryHandler(handle_bulk_menu)
             ],
             SELECTING_USER: [
+                # Handle both new and legacy user action patterns
                 CallbackQueryHandler(handle_user_action, pattern="^user_action_"),
+                CallbackQueryHandler(handle_user_action, pattern="^(edit_|disable_|enable_|reset_|revoke_|delete_|hwid_|stats_|confirm_del_hwid_)"),
                 CallbackQueryHandler(handle_user_selection)
             ],
             WAITING_FOR_INPUT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input),
+                CallbackQueryHandler(handle_users_menu)
             ],
             CONFIRM_ACTION: [
                 CallbackQueryHandler(handle_action_confirmation)
@@ -110,9 +124,11 @@ def create_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_edit_field_value)
             ],
             CREATE_USER: [
+                CallbackQueryHandler(handle_cancel_user_creation, pattern="^cancel_create$"),
                 CallbackQueryHandler(handle_create_user_input)
             ],
             CREATE_USER_FIELD: [
+                CallbackQueryHandler(handle_cancel_user_creation, pattern="^cancel_create$"),
                 CallbackQueryHandler(handle_create_user_input),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_create_user_input)
             ],
@@ -168,3 +184,5 @@ def create_conversation_handler():
         per_user=True,
         per_message=False
     )
+
+

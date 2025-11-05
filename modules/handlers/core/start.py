@@ -5,16 +5,24 @@ from modules.config import (
     DASHBOARD_SHOW_USERS_COUNT, DASHBOARD_SHOW_NODES_COUNT, 
     DASHBOARD_SHOW_TRAFFIC_STATS, DASHBOARD_SHOW_UPTIME
 )
-from modules.utils.auth import check_admin
+from modules.utils.auth import (
+    check_operator_or_admin,
+    get_user_role,
+    is_admin_user
+)
 from modules.api.users import UserAPI
 from modules.api.nodes import NodeAPI
 from modules.api.inbounds import InboundAPI
+from modules.handlers.core.language import LANGUAGE_MENU_CALLBACK
+from modules.localization import SUPPORTED_LANGUAGES, get_user_language
 from modules.utils.formatters import format_bytes
 import logging
 
 logger = logging.getLogger(__name__)
 
-@check_admin
+ROLE_DISPLAY = {"admin": "Администратор", "operator": "Оператор"}
+
+@check_operator_or_admin
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler"""
     await show_main_menu(update, context)
@@ -22,15 +30,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show main menu with system statistics"""
+    user = update.effective_user or (update.callback_query.from_user if update.callback_query else None)
+    role = get_user_role(user.id) if user else None
+    context.user_data['role'] = role
+    is_admin = is_admin_user(user.id) if user else False
+    current_language = get_user_language(context)
+    language_label = SUPPORTED_LANGUAGES.get(current_language, SUPPORTED_LANGUAGES.get('ru', 'Русский'))
+
     keyboard = [
         [InlineKeyboardButton("👥 Управление пользователями", callback_data="users")],
         [InlineKeyboardButton("🖥️ Управление серверами", callback_data="nodes")],
         [InlineKeyboardButton("📊 Статистика системы", callback_data="stats")],
         [InlineKeyboardButton("🌐 Управление хостами", callback_data="hosts")],
         [InlineKeyboardButton("🔌 Управление Inbounds", callback_data="inbounds")],
-        [InlineKeyboardButton("🔄 Массовые операции", callback_data="bulk")],
-        [InlineKeyboardButton("➕ Создать пользователя", callback_data="create_user")]
+        [InlineKeyboardButton("🌐 Язык бота", callback_data=LANGUAGE_MENU_CALLBACK)]
     ]
+
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("🔄 Массовые операции", callback_data="bulk")])
+        keyboard.append([InlineKeyboardButton("➕ Создать пользователя", callback_data="create_user")])
+
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Получаем статистику системы
@@ -38,6 +57,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = "🎛️ *Главное меню Remnawave Admin*\n\n"
     message += stats_text + "\n"
+    message += f"🌐 Текущий язык: {language_label}\n\n"
     message += "Выберите раздел для управления:"
 
     if update.callback_query:
@@ -62,121 +82,60 @@ async def get_system_stats():
         # Системная информация (если включена)
         if DASHBOARD_SHOW_SYSTEM_STATS:
             try:
-                import psutil
-                import os
-                from datetime import datetime
+                # Используем данные из API для консистентности
+                from modules.api.system import SystemAPI
                 
-                # Определяем, запущены ли мы в Docker
-                in_docker = os.path.exists('/.dockerenv')
-                
-                # Получаем системную информацию
-                if in_docker:
-                    # В Docker - читаем информацию из cgroup с улучшенной обработкой ошибок
-                    try:
-                        # CPU cores
-                        cpu_cores = 0
-                        cpu_quota_file = '/sys/fs/cgroup/cpu/cpu.cfs_quota_us'
-                        cpu_period_file = '/sys/fs/cgroup/cpu/cpu.cfs_period_us'
-                        
-                        # Альтернативные пути для cgroup v2
-                        if not os.path.exists(cpu_quota_file):
-                            cpu_quota_file = '/sys/fs/cgroup/cpu.max'
-                            cpu_period_file = None
-                        
-                        if os.path.exists(cpu_quota_file):
-                            with open(cpu_quota_file, 'r') as f:
-                                content = f.read().strip()
-                            
-                            if cpu_period_file and os.path.exists(cpu_period_file):
-                                quota = int(content)
-                                with open(cpu_period_file, 'r') as f:
-                                    period = int(f.read().strip())
-                                
-                                if quota > 0 and period > 0:
-                                    cpu_cores = max(1, quota // period)
-                                else:
-                                    cpu_cores = psutil.cpu_count()
-                            else:
-                                if 'max' in content:
-                                    cpu_cores = psutil.cpu_count()
-                                else:
-                                    parts = content.split()
-                                    if len(parts) >= 2:
-                                        quota = int(parts[0])
-                                        period = int(parts[1])
-                                        if quota > 0 and period > 0:
-                                            cpu_cores = max(1, quota // period)
-                                        else:
-                                            cpu_cores = psutil.cpu_count()
-                                    else:
-                                        cpu_cores = psutil.cpu_count()
-                        else:
-                            cpu_cores = psutil.cpu_count()
-                        
-                        cpu_physical_cores = cpu_cores
-                        cpu_percent = psutil.cpu_percent(interval=0.1)
-                        
-                        # Memory
-                        memory_limit_file = '/sys/fs/cgroup/memory/memory.limit_in_bytes'
-                        memory_usage_file = '/sys/fs/cgroup/memory/memory.usage_in_bytes'
-                        
-                        if not os.path.exists(memory_limit_file):
-                            memory_limit_file = '/sys/fs/cgroup/memory.max'
-                            memory_usage_file = '/sys/fs/cgroup/memory.current'
-                        
-                        if os.path.exists(memory_limit_file) and os.path.exists(memory_usage_file):
-                            with open(memory_limit_file, 'r') as f:
-                                limit_content = f.read().strip()
-                            
-                            with open(memory_usage_file, 'r') as f:
-                                memory_usage = int(f.read().strip())
-                            
-                            if limit_content == 'max':
-                                memory_limit = psutil.virtual_memory().total
-                            else:
-                                memory_limit = int(limit_content)
-                        else:
-                            vm = psutil.virtual_memory()
-                            memory_limit = vm.total
-                            memory_usage = vm.used
-                        
-                        class DockerMemory:
-                            def __init__(self, total, used):
-                                self.total = total
-                                self.used = used
-                                self.free = total - used
-                                self.percent = (used / total * 100) if total > 0 else 0
-                        
-                        memory = DockerMemory(memory_limit, memory_usage)
-                    except Exception as e:
-                        logger.warning(f"Error reading Docker cgroup stats, falling back to psutil: {e}")
-                        cpu_cores = psutil.cpu_count()
-                        cpu_physical_cores = psutil.cpu_count(logical=False)
-                        cpu_percent = psutil.cpu_percent(interval=0.1)
-                        memory = psutil.virtual_memory()
+                stats = await SystemAPI.get_stats()
+                if stats:
+                    # CPU Information
+                    cpu_cores = stats['cpu']['cores']
+                    cpu_physical_cores = stats['cpu']['physicalCores']
+                    
+                    # Memory Information with correct calculation
+                    total_mem = stats['memory']['total']
+                    free_mem = stats['memory']['free']
+                    available_mem = stats['memory'].get('available', free_mem)
+                    
+                    # Correct memory calculation for Linux systems
+                    used_mem = total_mem - available_mem
+                    used_percent = (used_mem / total_mem) * 100 if total_mem > 0 else 0
+                    
+                    system_stats = f"🖥️ *Система*:\n"
+                    system_stats += f"  • CPU: {cpu_cores} ядер ({cpu_physical_cores} физ.)\n"
+                    system_stats += f"  • RAM: {format_bytes(used_mem)} / {format_bytes(total_mem)} ({used_percent:.1f}%)\n"
+                    
+                    if DASHBOARD_SHOW_UPTIME:
+                        uptime_seconds = int(stats['uptime'])
+                        uptime_days = uptime_seconds // (24 * 3600)
+                        uptime_hours = (uptime_seconds % (24 * 3600)) // 3600
+                        uptime_minutes = (uptime_seconds % 3600) // 60
+                        system_stats += f"  • Uptime: {uptime_days}д {uptime_hours}ч {uptime_minutes}м\n"
+                    
+                    stats_sections.append(system_stats)
                 else:
+                    # Fallback to psutil if API fails
+                    import psutil
+                    from datetime import datetime
+                    
                     cpu_cores = psutil.cpu_count()
                     cpu_physical_cores = psutil.cpu_count(logical=False)
-                    cpu_percent = psutil.cpu_percent(interval=0.1)
                     memory = psutil.virtual_memory()
+                    
+                    system_stats = f"🖥️ *Система*:\n"
+                    system_stats += f"  • CPU: {cpu_cores} ядер ({cpu_physical_cores} физ.)\n"
+                    system_stats += f"  • RAM: {format_bytes(memory.used)} / {format_bytes(memory.total)} ({memory.percent:.1f}%)\n"
+                    
+                    if DASHBOARD_SHOW_UPTIME:
+                        uptime_seconds = psutil.boot_time()
+                        current_time = datetime.now().timestamp()
+                        uptime = int(current_time - uptime_seconds)
+                        uptime_days = uptime // (24 * 3600)
+                        uptime_hours = (uptime % (24 * 3600)) // 3600
+                        uptime_minutes = (uptime % 3600) // 60
+                        system_stats += f"  • Uptime: {uptime_days}д {uptime_hours}ч {uptime_minutes}м\n"
+                    
+                    stats_sections.append(system_stats)
                 
-                system_stats = f"🖥️ *Система*:\n"
-                system_stats += f"  • CPU: {cpu_cores} ядер ({cpu_physical_cores} физ.), {cpu_percent}%\n"
-                system_stats += f"  • RAM: {format_bytes(memory.used)} / {format_bytes(memory.total)} ({memory.percent:.1f}%)\n"
-                
-                if DASHBOARD_SHOW_UPTIME:
-                    uptime_seconds = psutil.boot_time()
-                    current_time = datetime.now().timestamp()
-                    uptime = int(current_time - uptime_seconds)
-                    uptime_days = uptime // (24 * 3600)
-                    uptime_hours = (uptime % (24 * 3600)) // 3600
-                    uptime_minutes = (uptime % 3600) // 60
-                    system_stats += f"  • Uptime: {uptime_days}д {uptime_hours}ч {uptime_minutes}м\n"
-                
-                stats_sections.append(system_stats)
-                
-            except ImportError:
-                logger.warning("psutil not available, skipping system stats")
             except Exception as e:
                 logger.error(f"Error getting system stats: {e}")
         
@@ -421,3 +380,5 @@ async def get_basic_system_stats():
     except Exception as e:
         logger.error(f"Error getting basic system stats: {e}")
         return "📈 *Статистика временно недоступна*\n"
+
+

@@ -5,22 +5,34 @@ import logging
 from modules.config import MAIN_MENU, NODE_MENU, EDIT_NODE, EDIT_NODE_FIELD, CREATE_NODE, NODE_NAME, NODE_ADDRESS, NODE_PORT, NODE_TLS, SELECT_INBOUNDS
 from modules.api.nodes import NodeAPI
 from modules.api.inbounds import InboundAPI
+from modules.api.config_profiles import ConfigProfileAPI
 from modules.utils.formatters import format_node_details, format_bytes
 from modules.utils.selection_helpers import SelectionHelper
-from modules.handlers.start_handler import show_main_menu
+from modules.handlers.core.start import show_main_menu
+from modules.utils.auth import is_admin_user, check_admin, INSUFFICIENT_PERMISSIONS_MESSAGE
 
 logger = logging.getLogger(__name__)
 
 async def show_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show nodes menu"""
-    keyboard = [
-        [InlineKeyboardButton("📋 Список всех серверов", callback_data="list_nodes")],
-        [InlineKeyboardButton("➕ Добавить новый сервер", callback_data="add_node")],
-        [InlineKeyboardButton("📜 Получить сертификат панели", callback_data="get_panel_certificate")],
-        [InlineKeyboardButton("🔄 Перезапустить все серверы", callback_data="restart_all_nodes")],
-        [InlineKeyboardButton("📊 Статистика использования", callback_data="nodes_usage")],
-        [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
-    ]
+    user = update.effective_user or (update.callback_query.from_user if update.callback_query else None)
+    is_admin = context.user_data.get('is_admin')
+    if is_admin is None and user is not None:
+        is_admin = is_admin_user(user.id)
+        context.user_data['is_admin'] = is_admin
+
+    keyboard = [[InlineKeyboardButton("📋 Список всех серверов", callback_data="list_nodes")]]
+
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("➕ Добавить новый сервер", callback_data="add_node")])
+
+    keyboard.append([InlineKeyboardButton("📜 Получить сертификат панели", callback_data="get_panel_certificate")])
+
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("🔄 Перезапустить все серверы", callback_data="restart_all_nodes")])
+
+    keyboard.append([InlineKeyboardButton("📊 Статистика использования", callback_data="nodes_usage")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     message = "🖥️ *Управление серверами*\n\n"
@@ -38,6 +50,17 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
+
+    is_admin = context.user_data.get('is_admin')
+    if is_admin is None:
+        is_admin = is_admin_user(update.effective_user.id)
+        context.user_data['is_admin'] = is_admin
+
+    admin_only_actions = {"add_node", "restart_all_nodes", "confirm_restart_all"}
+    admin_only_prefixes = ("enable_node_", "disable_node_", "restart_node_", "edit_node_")
+    if not is_admin and (data in admin_only_actions or data.startswith(admin_only_prefixes)):
+        await query.answer(INSUFFICIENT_PERMISSIONS_MESSAGE, show_alert=True)
+        return NODE_MENU
 
     if data == "list_nodes":
         await list_nodes(update, context)
@@ -293,6 +316,7 @@ async def show_nodes_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return NODE_MENU
 
+@check_admin
 async def enable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Enable node"""
     logger.info(f"Attempting to enable node with UUID: {uuid}")
@@ -334,6 +358,7 @@ async def enable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     
     return NODE_MENU
 
+@check_admin
 async def disable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Disable node"""
     logger.info(f"Attempting to disable node with UUID: {uuid}")
@@ -375,6 +400,7 @@ async def disable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid)
     
     return NODE_MENU
 
+@check_admin
 async def restart_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Restart node"""
     result = await NodeAPI.restart_node(uuid)
@@ -730,6 +756,7 @@ async def start_edit_node_field(update: Update, context: ContextTypes.DEFAULT_TY
         await update.callback_query.edit_message_text("❌ Ошибка при подготовке редактирования.")
         return EDIT_NODE
 
+@check_admin
 async def handle_node_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle input for node field editing"""
     try:
@@ -894,6 +921,7 @@ async def handle_cancel_node_edit(update: Update, context: ContextTypes.DEFAULT_
 # NODE CREATION FUNCTIONS
 # =============================================================================
 
+@check_admin
 async def start_create_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start creating a new node"""
     query = update.callback_query
@@ -908,7 +936,8 @@ async def start_create_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "trafficLimitBytes": 0,
         "notifyPercent": 80,
         "trafficResetDay": 1,
-        "excludedInbounds": [],
+        # v208: we'll collect selected inbound UUIDs
+        "selectedInbounds": [],
         "countryCode": "XX",
         "consumptionMultiplier": 1.0
     }
@@ -931,6 +960,7 @@ async def start_create_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return CREATE_NODE
 
+@check_admin
 async def handle_node_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle node creation steps"""
     try:
@@ -955,14 +985,18 @@ async def handle_node_creation(update: Update, context: ContextTypes.DEFAULT_TYP
             
             elif query.data.startswith("select_inbound_"):
                 inbound_id = query.data.replace("select_inbound_", "")
-                if inbound_id not in node_data["excludedInbounds"]:
-                    node_data["excludedInbounds"].append(inbound_id)
+                selected = node_data.get("selectedInbounds", [])
+                if inbound_id not in selected:
+                    selected.append(inbound_id)
+                    node_data["selectedInbounds"] = selected
                 return await show_inbound_exclusion(update, context)
             
             elif query.data.startswith("remove_inbound_"):
                 inbound_id = query.data.replace("remove_inbound_", "")
-                if inbound_id in node_data["excludedInbounds"]:
-                    node_data["excludedInbounds"].remove(inbound_id)
+                selected = node_data.get("selectedInbounds", [])
+                if inbound_id in selected:
+                    selected.remove(inbound_id)
+                    node_data["selectedInbounds"] = selected
                 return await show_inbound_exclusion(update, context)
             
             elif query.data == "finish_node_creation":
@@ -1074,24 +1108,24 @@ async def show_inbound_exclusion(update: Update, context: ContextTypes.DEFAULT_T
     try:
         node_data = context.user_data.get("create_node", {})
         
-        # Get all available inbounds
+        # Get all available inbounds (v208 via config profiles)
         inbounds = await InboundAPI.get_inbounds()
         
-        # Initialize excludedInbounds with all inbound IDs if not already set
-        if "excludedInbounds" not in node_data or node_data["excludedInbounds"] is None:
-            node_data["excludedInbounds"] = [inbound["uuid"] for inbound in inbounds]
+        # Initialize selectedInbounds list if not set
+        if "selectedInbounds" not in node_data or node_data["selectedInbounds"] is None:
+            node_data["selectedInbounds"] = []
             context.user_data["create_node"] = node_data
             
-        excluded_inbounds = node_data.get("excludedInbounds", [])
+        selected_inbounds = node_data.get("selectedInbounds", [])
         
         message = "🆕 *Создание новой ноды*\n\n"
-        message += "📡 Шаг 4 из 4: Настройка inbound'ов для ноды:\n\n"
-        message += "🔴 *Красный* = ОТКЛЮЧЕН (не будет работать на ноде)\n"
-        message += "🟢 *Зеленый* = ВКЛЮЧЕН (будет работать на ноде)\n\n"
+        message += "📡 Шаг 4 из 4: Выбор inbound'ов для активации (v208)\n\n"
+        message += "🟢 Выбран = будет активен\n"
+        message += "⚪ Не выбран = не будет активен\n\n"
         
         if inbounds:
             message += "📋 *Доступные inbound'ы:*\n"
-            message += "По умолчанию все inbound'ы отключены. Нажмите для изменения:\n\n"
+            message += "Нажимайте, чтобы выбрать/снять выбор:\n\n"
             
             keyboard = []
             
@@ -1102,13 +1136,13 @@ async def show_inbound_exclusion(update: Update, context: ContextTypes.DEFAULT_T
                 port = inbound.get("port", "N/A")
                 tag = inbound.get("tag", "Unknown")
                 
-                if inbound_id in excluded_inbounds:
-                    # Excluded (disabled) - red circle
-                    button_text = f"🔴 {tag} ({protocol}:{port})"
+                if inbound_id in selected_inbounds:
+                    # Selected (enabled)
+                    button_text = f"🟢 {tag} ({protocol}:{port})"
                     callback_data = f"remove_inbound_{inbound_id}"
                 else:
-                    # Included (enabled) - green circle
-                    button_text = f"🟢 {tag} ({protocol}:{port})"
+                    # Not selected
+                    button_text = f"⚪ {tag} ({protocol}:{port})"
                     callback_data = f"select_inbound_{inbound_id}"
                 
                 keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
@@ -1165,7 +1199,29 @@ async def create_node_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         node_data = context.user_data.get("create_node", {})
         
-        # Prepare data for API according to CreateNodeRequestDto
+        # Resolve config profile (v208 requires it)
+        active_profile_uuid = node_data.get("activeConfigProfileUuid")
+        if not active_profile_uuid:
+            try:
+                profiles = await ConfigProfileAPI.get_profiles()
+                if profiles and isinstance(profiles, list):
+                    active_profile_uuid = profiles[0].get("uuid")
+                    node_data["activeConfigProfileUuid"] = active_profile_uuid
+            except Exception:
+                active_profile_uuid = None
+        
+        # Filter selected inbounds to match chosen profile
+        selected_inbounds = node_data.get("selectedInbounds", [])
+        if active_profile_uuid and selected_inbounds:
+            try:
+                all_inbounds = await InboundAPI.get_inbounds()
+                inbound_profile_map = {i.get("uuid"): i.get("profileUuid") for i in (all_inbounds or [])}
+                selected_inbounds = [iid for iid in selected_inbounds if inbound_profile_map.get(iid) == active_profile_uuid]
+            except Exception:
+                # If mapping failed, keep original selected list
+                pass
+        
+        # Prepare data for API according to v208 CreateNodeRequestDto
         api_data = {
             "name": node_data["name"],
             "address": node_data["address"],
@@ -1174,9 +1230,12 @@ async def create_node_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "trafficLimitBytes": node_data.get("trafficLimitBytes", 0),
             "notifyPercent": node_data.get("notifyPercent", 80),
             "trafficResetDay": node_data.get("trafficResetDay", 1),
-            "excludedInbounds": node_data.get("excludedInbounds", []),
             "countryCode": node_data.get("countryCode", "XX"),
-            "consumptionMultiplier": node_data.get("consumptionMultiplier", 1.0)
+            "consumptionMultiplier": node_data.get("consumptionMultiplier", 1.0),
+            "configProfile": {
+                "activeConfigProfileUuid": active_profile_uuid,
+                "activeInbounds": selected_inbounds
+            }
         }
         
         await update.callback_query.edit_message_text("⏳ Создание ноды...")
@@ -1200,10 +1259,10 @@ async def create_node_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f"• Код страны: `{api_data['countryCode']}`\n"
             message += f"• Множитель потребления: `{api_data['consumptionMultiplier']}`\n\n"
             
-            if api_data["excludedInbounds"]:
-                message += f"❌ Исключенных inbound'ов: {len(api_data['excludedInbounds'])}\n\n"
+            if selected_inbounds:
+                message += f"🟢 Выбрано inbound'ов: {len(selected_inbounds)}\n\n"
             else:
-                message += "✅ Все inbound'ы доступны на ноде\n\n"
+                message += "⚪ Inbound'ы для ноды не выбраны\n\n"
             
             message += "🔧 *Следующие шаги:*\n"
             message += "1. Получите сертификат ноды\n"
@@ -1377,3 +1436,4 @@ async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TY
         )
         
         return NODE_MENU
+

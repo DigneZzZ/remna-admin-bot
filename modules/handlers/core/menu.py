@@ -1,15 +1,24 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
+import logging
 
 from modules.config import MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU, CREATE_USER, CREATE_USER_FIELD, SELECTING_USER
-from modules.utils.auth import check_authorization
-from modules.handlers.user_handlers import show_users_menu, start_create_user, show_user_details
-from modules.handlers.node_handlers import show_nodes_menu
-from modules.handlers.stats_handlers import show_stats_menu
-from modules.handlers.host_handlers import show_hosts_menu
-from modules.handlers.inbound_handlers import show_inbounds_menu
-from modules.handlers.bulk_handlers import show_bulk_menu
-from modules.handlers.start_handler import show_main_menu
+
+logger = logging.getLogger(__name__)
+from modules.utils.auth import check_authorization, get_user_role, is_admin_user
+from modules.handlers.users import show_users_menu, start_create_user, show_user_details
+from modules.handlers.nodes import show_nodes_menu
+from modules.handlers.stats import show_stats_menu
+from modules.handlers.hosts import show_hosts_menu
+from modules.handlers.inbounds import show_inbounds_menu, handle_inbounds_menu
+from modules.handlers.bulk import show_bulk_menu
+from modules.handlers.core.start import show_main_menu
+from modules.handlers.core.language import (
+    LANGUAGE_MENU_CALLBACK,
+    LANGUAGE_SELECT_PREFIX,
+    handle_language_selection,
+    show_language_menu,
+)
 
 async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu selection"""
@@ -21,7 +30,21 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
 
+    role = get_user_role(update.effective_user.id)
+    is_admin = is_admin_user(update.effective_user.id)
+    context.user_data['role'] = role
+    context.user_data['is_admin'] = is_admin
+
     data = query.data
+    admin_only_actions = {"bulk", "menu_bulk", "create_user", "menu_create_user"}
+    if data in admin_only_actions and not is_admin:
+        await query.answer("Этот раздел доступен только администраторам.", show_alert=True)
+        return MAIN_MENU
+
+    logger.info(f"=== MENU SELECTION HANDLER ===")
+    logger.info(f"Handling menu callback: {data}")
+    logger.info(f"Current state: {context.user_data.get('conversation_state', 'unknown')}")
+    logger.info(f"==============================")
 
     if data == "users" or data == "menu_users":
         await show_users_menu(update, context)
@@ -43,6 +66,15 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
         await show_inbounds_menu(update, context)
         return INBOUND_MENU
 
+    elif data == LANGUAGE_MENU_CALLBACK:
+        await show_language_menu(update, context)
+        return MAIN_MENU
+
+    # Handle inbound menu callbacks (temporary fix)
+    elif data in ["list_inbounds", "list_full_inbounds", "list_inbounds_stats", "filter_inbounds", "refresh_inbounds", "debug_users"]:
+        logger.info(f"Redirecting inbound callback to handle_inbounds_menu: {data}")
+        return await handle_inbounds_menu(update, context)
+
     elif data == "bulk" or data == "menu_bulk":
         await show_bulk_menu(update, context)
         return BULK_MENU
@@ -60,6 +92,9 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
         await show_user_details(update, context, uuid)
         return SELECTING_USER
 
+    elif data.startswith(LANGUAGE_SELECT_PREFIX):
+        return await handle_language_selection(update, context)
+
     return MAIN_MENU
 
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -72,3 +107,6 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Показываем главное меню со статистикой
     await show_main_menu(update, context)
     return MAIN_MENU
+
+
+

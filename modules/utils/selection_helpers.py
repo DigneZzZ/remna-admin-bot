@@ -190,30 +190,34 @@ class SelectionHelper:
             return []
     
     @staticmethod
-    def create_user_info_keyboard(user_uuid: str, action_prefix: str = "user_action") -> InlineKeyboardMarkup:
+    def create_user_info_keyboard(user_uuid: str, action_prefix: str = "user_action", is_admin: bool = False) -> InlineKeyboardMarkup:
         """Create keyboard with user actions"""
-        keyboard = [
-            [
-                InlineKeyboardButton("✏️ Редактировать", callback_data=f"{action_prefix}_edit_{user_uuid}"),
-                InlineKeyboardButton("🔄 Обновить данные", callback_data=f"{action_prefix}_refresh_{user_uuid}")
-            ],
-            [
-                InlineKeyboardButton("🚫 Отключить", callback_data=f"{action_prefix}_disable_{user_uuid}"),
-                InlineKeyboardButton("✅ Включить", callback_data=f"{action_prefix}_enable_{user_uuid}")
-            ],
-            [
-                InlineKeyboardButton("📊 Сбросить трафик", callback_data=f"{action_prefix}_reset_traffic_{user_uuid}"),
-                InlineKeyboardButton("🔐 Отозвать подписку", callback_data=f"{action_prefix}_revoke_{user_uuid}")
-            ],
-            [
-                InlineKeyboardButton("🗑️ Удалить", callback_data=f"{action_prefix}_delete_{user_uuid}")
-            ],
-            [
-                InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_users")
-            ]
-        ]
-        return InlineKeyboardMarkup(keyboard)
-    
+        rows = []
+
+        if is_admin:
+            rows.extend([
+                [
+                    InlineKeyboardButton("✏️ Редактировать", callback_data=f"{action_prefix}_edit_{user_uuid}"),
+                    InlineKeyboardButton("🔄 Обновить данные", callback_data=f"{action_prefix}_refresh_{user_uuid}")
+                ],
+                [
+                    InlineKeyboardButton("🚫 Отключить", callback_data=f"{action_prefix}_disable_{user_uuid}"),
+                    InlineKeyboardButton("✅ Включить", callback_data=f"{action_prefix}_enable_{user_uuid}")
+                ],
+                [
+                    InlineKeyboardButton("📊 Сбросить трафик", callback_data=f"{action_prefix}_reset_traffic_{user_uuid}"),
+                    InlineKeyboardButton("🔐 Отозвать подписку", callback_data=f"{action_prefix}_revoke_{user_uuid}")
+                ],
+                [
+                    InlineKeyboardButton("🗑️ Удалить", callback_data=f"{action_prefix}_delete_{user_uuid}")
+                ]
+            ])
+        else:
+            rows.append([InlineKeyboardButton("🔄 Обновить данные", callback_data=f"{action_prefix}_refresh_{user_uuid}")])
+
+        rows.append([InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_users")])
+        return InlineKeyboardMarkup(rows)
+
     @staticmethod
     def create_inbound_info_keyboard(inbound_uuid: str, action_prefix: str = "inbound_action") -> InlineKeyboardMarkup:
         """Create keyboard with inbound actions"""

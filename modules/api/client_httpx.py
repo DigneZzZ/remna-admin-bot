@@ -4,7 +4,7 @@
 import httpx
 import logging
 import asyncio
-from modules.config import API_BASE_URL, API_TOKEN
+from modules.config import API_BASE_URL, API_TOKEN, API_COOKIES
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class RemnaAPIHttpx:
             "X-Forwarded-For": "127.0.0.1",
             "X-Real-IP": "127.0.0.1"
         }
-        
+
         # Настройки клиента для HTTP
         client_kwargs = {
             "timeout": 30.0,
@@ -34,6 +34,10 @@ class RemnaAPIHttpx:
             "headers": headers
         }
         
+        if API_COOKIES:
+            client_kwargs["cookies"] = API_COOKIES
+            logger.debug("HTTPX: Configured API cookies: %s", ", ".join(API_COOKIES.keys()))
+
         logger.info(f"HTTPX: Making {method} request to {url}")
         
         try:

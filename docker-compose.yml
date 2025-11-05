@@ -1,43 +1,63 @@
-version: '3.8'
-
 services:
-  bot:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    container_name: remnawave-admin-bot-dev
+  remna-bot:
+    image: ghcr.io/dignezzz/remna-admin-bot:latest
+    container_name: remna-telegram-bot-prod
     restart: unless-stopped
-    
     env_file:
       - .env
+
+    environment:
+      # Только переменные, специфичные для production
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
     
     volumes:
-      # Mount source code for development
-      - ./:/app
-      - /app/__pycache__  # Exclude cache directory
-      
-      # Mount logs directory
-      - ./logs:/app/logs
-    
-    environment:
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=DEBUG
-    
-    # Development port for debugging
-    ports:
-      - "8080:8080"
-    
-    # Override command for development
-    command: python main.py
+      # Mount logs directory for persistence
+      - remna-bot-logs:/app/logs
+      # Mount .env file if you prefer file-based configuration
+      # - ./.env:/app/.env:ro
     
     # Health check
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
       retries: 3
       start_period: 60s
+    
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+      # Network configuration
+    networks:
+      - remnawave-network
+    # Production logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # User specification (matches Dockerfile)
+    user: "1000:1000"
 
 volumes:
-  logs:
+  remna-bot-logs:
     driver: local
+
+networks:
+  remnawave-network:
+    name: remnawave-network
+    driver: bridge
+    external: true
