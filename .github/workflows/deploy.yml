@@ -38,7 +38,7 @@ jobs:
       - name: Deploy notification
         run: |
           echo "🚀 Deploying Remnawave Admin Bot"
-          echo "📦 Image: ghcr.io/case211/remna-ad:${{ steps.image_tag.outputs.tag }}"
+          echo "📦 Image: ghcr.io/dignezzz/remna-admin-bot:${{ steps.image_tag.outputs.tag }}"
           echo "🔧 Environment: Production"
 
       # Example deployment to a server via SSH
