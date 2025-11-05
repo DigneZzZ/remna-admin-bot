@@ -53,8 +53,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Add labels
 LABEL org.opencontainers.image.title="Remnawave Admin Bot"
 LABEL org.opencontainers.image.description="Telegram bot for managing Remnawave VPN service"
-LABEL org.opencontainers.image.source="https://github.com/DigneZzZ/remna-admin-bot"
-LABEL org.opencontainers.image.vendor="DigneZzZ"
+LABEL org.opencontainers.image.source="https://github.com/dignezzz/remna-telegram-bot"
+LABEL org.opencontainers.image.vendor="dignezzz"
 
 # Run the application
 CMD ["python", "main.py"]
