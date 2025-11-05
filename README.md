@@ -41,8 +41,8 @@ Telegram-бот для администрирования Remnawave: управ�
 ```bash
 sudo mkdir -p /opt/remna-bot
 cd /opt/remna-bot
-curl -o .env https://raw.githubusercontent.com/Case211/remna-ad/main/.env.example
-curl -o docker-compose.yml https://raw.githubusercontent.com/Case211/remna-ad/main/docker-compose-prod.yml
+curl -o .env https://raw.githubusercontent.com/DigneZzZ/remna-admin-bot/main/.env.example
+curl -o docker-compose.yml https://raw.githubusercontent.com/DigneZzZ/remna-admin-bot/main/docker-compose-prod.yml
 ```
 2) Настройка окружения:
 ```bash
@@ -59,7 +59,7 @@ docker compose logs -f
 
 ### Ручной запуск
 ```bash
-git clone https://github.com/Case211/remna-ad.git
+git clone https://github.com/DigneZzZ/remna-admin-bot.git
 cd remna-ad
 pip install -r requirements.txt
 cp .env.example .env
