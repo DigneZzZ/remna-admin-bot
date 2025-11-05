@@ -60,7 +60,7 @@ docker compose logs -f
 ### Ручной запуск
 ```bash
 git clone https://github.com/DigneZzZ/remna-admin-bot.git
-cd remna-ad
+cd remna-admin-bot
 pip install -r requirements.txt
 cp .env.example .env
 nano .env
