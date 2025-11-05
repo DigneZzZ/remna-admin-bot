@@ -9,8 +9,7 @@ Telegram-бот для администрирования Remnawave: управ�
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
 
 Контакты для связи: 
-- [openode.xyz](https://openode.xyz)
-- [neonode.cc](https://neonode.cc)
+- [GIG.ovh](https://gig.ovh)
 - [Github - Case211](https://github.com/Case211)
 - [Telegram](https://t.me/remnawave_admin)
 ### Основные возможности
