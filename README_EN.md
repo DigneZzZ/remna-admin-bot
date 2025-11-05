@@ -12,7 +12,7 @@ Contact points:
 - [openode.xyz](https://openode.xyz)
 - [neonode.cc](https://neonode.cc)
 - [GitHub – Case211](https://github.com/Case211)
-- [Telegram](https://t.me/ispanec_nn)
+- [Telegram](https://t.me/remnawave_admin)
 
 ### Key Features
 - **Users:** search (username/UUID/Telegram/email/tag), create/edit, enable/disable, traffic reset, HWID devices, statistics.
